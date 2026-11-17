@@ -190,6 +190,11 @@ TEXTURE_NAMES = {
     "grass_block": ("grass_block_top", "grass_block_side"), "smooth_sandstone": ("sandstone_top", "sandstone_top"),
     "water": ("water_still", "water_still"), "smooth_stone": ("smooth_stone", "smooth_stone"),
 }
+# when a pack has no texture for a block: its older name (packs made before Minecraft 1.17), or a look-alike
+OLD_TEXTURE_NAMES = {"dirt_path": "grass_path", "polished_deepslate": "gray_concrete",
+                     "deepslate_tiles": "polished_blackstone_bricks"}
+# the Minecraft-style textures that come with place2mc (Pixel Perfection CE, CC BY-SA 4.0, see its CREDITS.md)
+BUNDLED_TEXTURES = Path(__file__).resolve().parent / "textures" / "pixel-perfection-ce"
 STAIRS_MATERIAL = {"brick": "bricks", "deepslate_tile": "deepslate_tiles", "stone_brick": "stone_bricks",
                    "polished_blackstone_brick": "polished_blackstone_bricks"}
 # the game stores some textures in grey and colours them by biome; these are the plains colours
@@ -240,6 +245,12 @@ class TextureSource:
             return None
         rgb, alpha = rgba[..., :3], rgba[..., 3:] / 255.0
         if name in TINTS:
+            solid_px = rgb[alpha[..., 0] > 0.5]
+            if len(solid_px) and (solid_px.max(axis=1) - solid_px.min(axis=1)).mean() > 50:
+                # a pack that colours this texture itself: make it grey first, so the game's tint gives its colour
+                grey = rgb @ np.array([0.299, 0.587, 0.114])
+                grey *= 150.0 / max(float(grey[alpha[..., 0] > 0.5].mean()), 1.0)
+                rgb = np.repeat(grey[..., None], 3, axis=-1)
             rgb = rgb * np.array(TINTS[name]) / 255.0
         if name == "grass_block_side":
             overlay = self.raw("grass_block_side_overlay")
@@ -276,11 +287,16 @@ class TextureSource:
                 self.missing.append(name)
                 return None
             return got[0], got[0], got[1], got[1]
-        top_name, side_name = TEXTURE_NAMES.get(base, (base + "_top", base + "_side"))
-        top = self.get(top_name, backdrop)
-        side = self.get(side_name, backdrop)
-        plain = self.get(base, backdrop) if top is None or side is None else None
-        top, side = top if top is not None else plain, side if side is not None else plain
+        for stem in (base, OLD_TEXTURE_NAMES.get(base)):
+            if stem is None:
+                continue
+            top_name, side_name = TEXTURE_NAMES.get(stem, (stem + "_top", stem + "_side"))
+            top = self.get(top_name, backdrop)
+            side = self.get(side_name, backdrop)
+            plain = self.get(stem, backdrop) if top is None or side is None else None
+            top, side = top if top is not None else plain, side if side is not None else plain
+            if top is not None and side is not None:
+                break
         if top is None or side is None:
             self.missing.append(name)
             return None
@@ -288,12 +304,17 @@ class TextureSource:
 
 
 def resolve_textures(textures):
-    """None -> built-in textures. "auto" -> the game's own textures if Minecraft is installed. Else a path."""
+    """None or "builtin" -> drawn-by-code textures. "auto" -> the game's own textures if Minecraft Java is
+    installed, else the Minecraft-style pack that comes with place2mc. "pack" -> that pack. Else a path."""
     if textures in (None, "", "builtin"):
         return None
     if textures == "auto":
         jar = find_minecraft_jar()
-        return TextureSource(jar) if jar else None
+        if jar:
+            return TextureSource(jar)
+        textures = "pack"
+    if textures == "pack":
+        return TextureSource(BUNDLED_TEXTURES) if BUNDLED_TEXTURES.is_dir() else None
     return TextureSource(textures)
 
 
@@ -404,7 +425,7 @@ def _make_textures(source=None):
         name = full_name.split(":")[1]
         if name.endswith("_door") or name == "tall_grass":
             name += "/" + props["half"]
-        entry = source.block(name) if source is not None else None
+        entry = source.block(name) if source is not None and name not in ("air", "barrier") else None
         if entry is not None:
             top, side, solid[i, 0], solid[i, 1] = entry
         else:
@@ -946,7 +967,8 @@ def standard_views(vol, out_dir, width=1280, height=720, textures="auto"):
     """Three pictures of any place, drawn the way the game shows it at noon: standing in a street as a player
     (render distance 16), above the rooftops (16), and an overview from high up (32)."""
     source = resolve_textures(textures)
-    print("Textures: " + (f"from {source.path}" if source else "built-in (no Minecraft Java installation found)"))
+    print("Textures: " + ("Pixel Perfection CE (comes with place2mc; no Minecraft Java installation found)"
+                          if source and source.path == BUNDLED_TEXTURES else f"from {source.path}" if source else "built-in"))
     sx, sz = vol.shape[2], vol.shape[1]
     column = vol[:, sz // 2, sx // 2]
     centre = (sx / 2, (int(np.flatnonzero(column != p.AIR)[-1]) if column.any() else p.FLOOR) + 4, sz / 2)

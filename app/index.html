@@ -21,6 +21,8 @@
   button { cursor: pointer; border: 0; border-radius: 6px; padding: 9px 12px; font-size: 14px; font-weight: 600;
            background: #3b4048; color: var(--text); }
   button:hover { background: #474d56; }
+  button.primary { background: var(--green); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); background: var(--green); }
   #convert { width: 100%; margin-top: 18px; padding: 13px; font-size: 16px; background: var(--green);
              box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
   #convert:hover { background: var(--green-hi); }
@@ -210,12 +212,16 @@ async function poll() {
     $("state").textContent = "Done!";
     const world = s.world ? s.world.split(/[\\/]/).pop() : "";
     let html = '<div class="done">';
+    if (s.walk)
+      html += `<b>Walk around it now:</b> press <b>Walk around</b>. It opens in a new tab, no Minecraft needed. ` +
+              `The file <b>Walk around ${world}.html</b> in the world folder does the same on any computer or phone.<br>`;
     if (s.world && edition() !== "bedrock")
       html += `<b>Java:</b> open Minecraft → Singleplayer → <b>${world}</b>. You start on a street in the middle.<br>`;
     if (s.mcworld)
       html += `<b>Bedrock:</b> press <b>Add to Bedrock</b> (on Windows Minecraft opens and imports it), or send ` +
               `<b>${s.mcworld.split(/[\\/]/).pop()}</b> to your phone or tablet and open it there.<br>`;
     html += '<div class="row" style="margin-top:8px">';
+    if (s.walk) html += '<button class="primary" onclick="window.open(\'/walk\', \'_blank\')">Walk around</button>';
     if (s.mcworld) html += '<button onclick="addToBedrock()">Add to Bedrock</button>';
     html += '<button onclick="openFolder(\'world\')">Show world folder</button>';
     if (edition() !== "bedrock") html += '<button onclick="openFolder(\'saves\')">Show Minecraft saves</button>';

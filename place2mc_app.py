@@ -44,6 +44,7 @@ class Job:
         self.ok = False
         self.world = None
         self.mcworld = None
+        self.walk = None
         self.pictures = []
 
     def start(self, args):
@@ -51,6 +52,7 @@ class Job:
             if not self.done:
                 return False
             self.log, self.done, self.ok, self.world, self.mcworld, self.pictures = [], False, False, None, None, []
+            self.walk = None
         cmd = [sys.executable, "-u", str(HERE / "place2mc.py")] + args
         self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                         encoding="utf-8", errors="replace", cwd=str(HERE))
@@ -62,7 +64,7 @@ class Job:
             line = line.rstrip()
             with self.lock:
                 self.log.append(line)
-                for key, attr in (("WORLD: ", "world"), ("MCWORLD: ", "mcworld")):
+                for key, attr in (("WORLD: ", "world"), ("MCWORLD: ", "mcworld"), ("WALK: ", "walk")):
                     if line.startswith(key):
                         setattr(self, attr, line[len(key):])
                 if line.startswith("Picture: ") or line.startswith("Preview picture: "):
@@ -76,7 +78,7 @@ class Job:
     def status(self):
         with self.lock:
             return {"running": not self.done, "ok": self.ok, "log": self.log[-400:], "world": self.world,
-                    "mcworld": self.mcworld,
+                    "mcworld": self.mcworld, "walk": "/walk" if self.walk else None,
                     "pictures": [f"/picture?i={i}&t={int(time.time())}" for i in range(len(self.pictures))]}
 
 
@@ -122,6 +124,11 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 reason = str(getattr(exc, "reason", "") or exc) or type(exc).__name__
                 return self.send(502, {"error": f"Search failed ({reason})"})
+        if url.path == "/walk":                     # the walk-through page of the last world made
+            path = Path(JOB.walk) if JOB.walk else None
+            if not path or path.suffix != ".html" or not path.is_file():
+                return self.send(404, {"error": "No walk-through yet. Convert a place first."})
+            return self.send(200, path.read_bytes(), "text/html; charset=utf-8")
         if url.path == "/picture":
             try:
                 path = Path(JOB.pictures[int(query.get("i", ["-1"])[0])])

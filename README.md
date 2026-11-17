@@ -1,8 +1,9 @@
 # place2mc
 
-Pick any real place on a map, press Convert, and walk around it in Minecraft. place2mc downloads the streets,
-buildings, water, parks and trees from OpenStreetMap and the hills from public elevation data, and builds them
-at 1 block = 1 metre. It makes a ready-to-play Java world, a Bedrock `.mcworld` file, or both.
+Pick any real place on a map, press Convert, and walk around it like you are in Minecraft. place2mc downloads the
+streets, buildings, water, parks and trees from OpenStreetMap and the hills from public elevation data, and builds
+them at 1 block = 1 metre. You get a walk-through that opens in any browser (no Minecraft needed), a ready-to-play
+Java world, and a Bedrock `.mcworld` file.
 
 ![Standing in a street of the converted town](docs/street.jpg)
 
@@ -12,8 +13,8 @@ at 1 block = 1 metre. It makes a ready-to-play Java world, a Bedrock `.mcworld` 
 | ![Fences, garden walls, hedge and railway](docs/fences-walls-rails.jpg) | ![Fenced garden](docs/garden-fence.jpg) |
 
 These pictures are made by place2mc itself (`mcrender.py`), drawn the way the game draws a world at noon. On a
-computer with Minecraft Java installed it uses the game's own textures from your install; the pictures above
-use the built-in look-alike textures.
+computer with Minecraft Java installed, the pictures and the walk-through use the textures of your own game;
+otherwise they use the Minecraft-style Pixel Perfection CE textures that come with place2mc.
 
 ## Use it
 
@@ -22,6 +23,8 @@ use the built-in look-alike textures.
 3. Double-click **start-windows.bat** (Windows) or **start-mac.command** (Mac). A page opens in your browser.
 4. Search for a place or click on the map, choose the size and the edition, and press **Convert**.
 5. When it says Done:
+   - **Walk around**: press **Walk around** and walk with W A S D and the mouse, right in the browser. The file
+     `Walk around <name>.html` in the world folder does the same on any computer or phone: just open it.
    - **Java**: open Minecraft, go to Singleplayer, and the new world is in the list. You start on a street in the middle.
    - **Bedrock**: press **Add to Bedrock** (on Windows, Minecraft opens and imports the world), or send the
      `.mcworld` file to your phone or tablet and open it there.
@@ -71,6 +74,8 @@ elevation tiles), and the game's own textures for the pictures.
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL). Worlds built from
   it contain OpenStreetMap data, so credit it if you share them.
 - Elevation: Terrain Tiles on AWS (Mapzen / Tilezen), from SRTM, USGS and other public sources.
+- Textures for the pictures and the walk-through when Minecraft is not installed: [Pixel Perfection CE](https://github.com/Athemis/PixelPerfectionCE)
+  by XSSheep and contributors, CC BY-SA 4.0 (see `textures/pixel-perfection-ce/CREDITS.md`).
 - Map in the app: [Leaflet](https://leafletjs.com) (BSD-2-Clause, licence in `app/leaflet/LICENSE`).
 - [Arnis](https://github.com/louis-e/arnis) (Apache-2.0) does the same job in more detail; its Bedrock worlds
   were the reference for the Bedrock file layout and settings used here.

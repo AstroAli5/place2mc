@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "0.5"
+VERSION = "0.6"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -1159,9 +1159,21 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     level_access = (g[oz, ox] == base[cz_, cx_]) & ~has_building[oz, ox]
     rank = (~level_access).astype(int) * 2 + (~near_street.ravel()[cells]).astype(int)
     cells = cells[np.argsort(rank, kind="stable")]      # level with the outside first, then the street side
-    ids, first = np.unique(bmap.ravel()[cells], return_index=True)
+    # one door per 45 blocks of wall (at least one, at most four), at least 20 blocks apart
+    perimeter = np.bincount(bmap[walls], minlength=len(specs))
+    want = np.clip(perimeter // 45, 1, 4)
+    chosen, placed_at = [], {}
+    for cell in cells:
+        building = int(bmap.ravel()[cell])
+        spots = placed_at.setdefault(building, [])
+        if len(spots) >= want[building]:
+            continue
+        z, x = divmod(int(cell), size)
+        if all(abs(z - pz) + abs(x - px) >= 20 for pz, px in spots):
+            spots.append((z, x))
+            chosen.append((cell, building))
     doors_placed, doorways = 0, []
-    for cell, building in zip(cells[first], ids):
+    for cell, building in chosen:
         z, x = divmod(int(cell), size)
         f = FACINGS[int(facing[z, x])]
         kind = DOORS[int(spec[building, 9])]
@@ -1302,6 +1314,21 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         taken[z, x] = True
         lamps += 1
 
+    # lamps along footpaths and park paths too, on the grass beside the path, roughly every 16 blocks
+    path = np.isin(ground, (S_FOOT, S_PATH))
+    lawn = np.isin(ground, (S_GRASS, S_PARK, S_LAWN)) & ~has_building
+    path_lamp_ok = lawn & (window_fraction(path, 1) > 0) & ~(window_fraction(has_building, 2) > 0) & ~water
+    for cell in rng.permutation(np.flatnonzero(path_lamp_ok)):
+        z, x = divmod(int(cell), size)
+        y = int(g[z, x]) + 1
+        if blocked[z, x] or vol[y, z, x] != AIR:
+            continue
+        vol[y:y + 3, z, x] = LAMP_POST
+        vol[y + 3, z, x] = LANTERN
+        blocked[max(0, z - 15):z + 16, max(0, x - 15):x + 16] = True
+        taken[z, x] = True
+        lamps += 1
+
     # half slabs where a road or sidewalk climbs one block
     paving = np.isin(ground, (S_SIDEWALK, S_FOOT, S_PLAZA, S_QUAY, S_PAVED)) & ~has_building
     driving = np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) & ~has_building
@@ -1372,6 +1399,21 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
             if vol[y, z, x] == AIR:
                 vol[y, z, x] = TREES[0][1]
 
+    # planting along the walls of buildings that stand on lawns: bushes and flowers, not in front of doors
+    beside = lawn & (window_fraction(has_building, 1) > 0) & ~(window_fraction(has_building, 0) > 0)
+    for y, oz, ox in doorways:
+        beside[max(0, oz - 1):oz + 2, max(0, ox - 1):ox + 2] = False
+    roll_b = rng.random((size, size))
+    kind_b = rng.integers(0, len(FLOWERS), (size, size))
+    bush = beside & (roll_b < 0.42) & (vol[g + 1, zz, xx] == AIR)
+    z_i, x_i = np.nonzero(bush)
+    vol[g[bush] + 1, z_i, x_i] = np.where(rng.random(len(z_i)) < 0.75, TREES[0][1], TREES[2][1])
+    tall = bush & (roll_b < 0.10) & (vol[g + 2, zz, xx] == AIR)
+    vol[g[tall] + 2, np.nonzero(tall)[0], np.nonzero(tall)[1]] = TREES[0][1]
+    bed = beside & (roll_b >= 0.42) & (roll_b < 0.72) & (vol[g + 1, zz, xx] == AIR)
+    vol[g[bed] + 1, np.nonzero(bed)[0], np.nonzero(bed)[1]] = np.array(FLOWERS, dtype=np.uint8)[kind_b[bed]]
+    landscaping = int(bush.sum() + bed.sum())
+
     # grass, tall grass, ferns and flowers on grass blocks, as in the game's own plains and forests
     roll = rng.random((size, size))
     kind = rng.integers(0, len(FLOWERS), (size, size))
@@ -1402,7 +1444,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
                                                        # placed later can fill it
     build_volume.stats = {"trees": planted, "street lamps": lamps, "doors": doors_placed, "plants and flowers": plants,
                           "half slabs on slopes": slabs, "rails": rails_laid, "fence, wall and hedge blocks": barrier_cells,
-                          "benches": benches}
+                          "benches": benches, "bushes and flowers by buildings": landscaping}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -1726,9 +1768,10 @@ def main():
     ap.add_argument("--save-osm", help="save the downloaded map data to this .json file")
     ap.add_argument("--preview-only", action="store_true", help="only make the preview picture")
     ap.add_argument("--screenshots", action="store_true", help="also draw game-style 3D pictures (needs mcrender.py next to this file)")
+    ap.add_argument("--no-walk", action="store_true", help="do not make the walk-through page")
     ap.add_argument("--textures", default="auto",
-                    help='textures for --screenshots: "auto" (your Minecraft Java install if found), "builtin", '
-                         'or a path to a game .jar or resource pack')
+                    help='textures for the pictures and the walk-through: "auto" (your Minecraft Java if installed, else '
+                         'the Minecraft-style pack that comes with place2mc), "pack", "builtin", or a game .jar or resource pack')
     ap.add_argument("--flat", action="store_true", help="build on flat ground instead of the real hills")
     ap.add_argument("--tile-cache", default=str(Path.home() / ".place2mc" / "elevation"),
                     help="folder that keeps downloaded elevation tiles, so an area is only downloaded once")
@@ -1812,6 +1855,12 @@ def main():
     spawn = choose_spawn(vol, ground, build_volume.surface)
     biomes = biome_map(ground)
     world_name = safe_folder_name(args.new_world or label)
+    if not args.no_walk:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))      # walkdata.py and mcrender.py sit next to this file
+        import walkdata
+        walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures)
+        print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
+        print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):
         sys.path.insert(0, str(Path(__file__).resolve().parent))      # bedrock.py sits next to this file
         import bedrock

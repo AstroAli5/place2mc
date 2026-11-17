@@ -21,6 +21,15 @@ If the fable-playbook skill is available, follow it on every task.
   sub-chunk format 9, level.dat with the field set of a Bedrock 1.21.120 save. Block names/states come from
   `bedrock_blocks.json`, made by `tests/make_bedrock_table.py`. **Regenerate that table whenever a block is
   added to place2mc.py**, or Bedrock export stops with a message.
+- `walkdata.py` + `app/walk.html`: the walk-through. walkdata writes `Walk around <name>.html` into the world
+  folder: the viewer with the world inside it (block columns as runs, gzip, base64; texture atlas; block table).
+  The viewer is plain WebGL2 (no libraries): chunk meshes with the game's sky light, face shading and smooth
+  lighting, see-through leaves/plants, water and glass, fog, clouds; WASD, mouse (pointer lock, or drag when
+  a page viewer refuses it), jump, auto-jump, step-up, sprint, fly, collisions; touch controls on phones.
+  Test it with headless Chrome: `--use-angle=swiftshader --enable-unsafe-swiftshader` (about 6 fps there).
+- `textures/pixel-perfection-ce/`: the Minecraft-style textures used when Minecraft Java is not installed
+  (CC BY-SA 4.0, keep CREDITS.md and LICENSE.md with them). Add any texture a new block needs from
+  github.com/Athemis/PixelPerfectionCE, or give it a look-alike in mcrender.OLD_TEXTURE_NAMES.
 - `mcrender.py`: draws pictures the way the game does at noon (sky light levels, face shading, smooth
   lighting, fog by render distance, clouds, block shapes for stairs/slabs/doors/fences/walls/rails/lanterns).
   Uses the real textures from the user's own Minecraft Java install or a resource pack when found, built-in
@@ -68,7 +77,13 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
-## State (v0.5)
+## State (v0.6)
+
+v0.6 (asked for by Ali: "walk through it like I'm in the game", "look like Minecraft", more detail): the
+walk-through, the bundled Pixel Perfection CE textures, doors every 45 m of wall, lamps along footpaths,
+bushes and flowers along walls on lawns. Ali has no Minecraft on the computer he uses, so the walk-through is
+how he sees the result; ALA's walk-through was published as a claude.ai page for him.
+
 
 Checked in a cloud workspace with no Minecraft, no access to OpenStreetMap's live servers or the elevation
 servers: on map files of Monaco and West Oakland and a made-up map, flat and on test hills, the Java world
