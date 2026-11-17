@@ -248,6 +248,12 @@ AREAS = {
     ("leisure", "dog_park"): (S_PARK, 2), ("leisure", "common"): (S_PARK, 2),
     ("leisure", "pitch"): (S_PITCH, 3), ("leisure", "playground"): (S_SAND, 3), ("leisure", "track"): (S_FOOT, 3),
     ("amenity", "parking"): (S_PARKING, 3),
+    # land cover seen from space (ESA WorldCover, through Overture): trees beat a general land use like
+    # "industrial" or a campus, but not parks' own paths, pitches, parking or water; crops and bare ground only
+    # show where the map says nothing
+    ("place2mc:land_cover", "forest"): (S_FOREST, 2.5), ("place2mc:land_cover", "mangrove"): (S_FOREST, 2.5),
+    ("place2mc:land_cover", "shrub"): (S_PARK, 1.5), ("place2mc:land_cover", "wetland"): (S_PARK, 1.5),
+    ("place2mc:land_cover", "crop"): (S_FARM, -1), ("place2mc:land_cover", "barren"): (S_FARM, -1),
     # school and college grounds: lawn, drawn over the landuse around them and under their pitches and gardens
     ("amenity", "school"): (S_PARK, 1), ("amenity", "college"): (S_PARK, 1), ("amenity", "university"): (S_PARK, 1),
     ("amenity", "kindergarten"): (S_PARK, 1),
@@ -759,7 +765,7 @@ def build_map(elements, lat0, lon0, size):
             continue
         if tags.get("amenity") in CAMPUS_TYPES and outers:
             campuses.append(outers)
-        for key in ("natural", "landuse", "leisure", "waterway", "amenity"):
+        for key in ("natural", "landuse", "leisure", "waterway", "amenity", "place2mc:land_cover"):
             hit = AREAS.get((key, tags.get(key)))
             if hit and outers:
                 areas.append((hit[1], hit[0], outers, inners))
@@ -823,8 +829,13 @@ def build_map(elements, lat0, lon0, size):
     # per building: height, wall, roof, pitched roof, windows, floor height, glass, base/trim block, window spacing
     # ... door kind (index into DOORS), shop windows on the ground floor
     specs = [(0, AIR, AIR, 0, 0, 3, GLASS, AIR, 4, 0, 0)]
-    buildings.sort(key=lambda b: not b[4])  # relations first, so buildings inside a courtyard are kept
+    # OpenStreetMap's buildings first (relations first, so buildings inside a courtyard are kept), then Overture's
+    buildings.sort(key=lambda b: (b[1].get("source:place2mc") == "overture", not b[4]))
+    from_overture = 0
     for osm_id, tags, outers, inners, _ in buildings:
+        if tags.get("source:place2mc") == "overture" and already_built(bimg, outers, size):
+            continue
+        from_overture += tags.get("source:place2mc") == "overture"
         btype = tags.get("building", "yes")
         area = sum(polygon_area(r) for r in outers)
         pick = (osm_id * 2654435761) >> 8
@@ -874,7 +885,7 @@ def build_map(elements, lat0, lon0, size):
     counts = {"buildings": len(specs) - 1, "roads": len(roads), "areas": len(areas), "coastlines": len(coast),
               "waterways": len(waterways), "railways": len(rails), "mapped trees": len(trees),
               "zebra crossings": len(crossing_ways) + len(crossing_nodes), "fences, walls and hedges": len(barriers),
-              "benches": len(benches)}
+              "benches": len(benches), "buildings from Overture": from_overture}
     ground = np.array(ground_img, dtype=np.uint8)
     bmap = np.array(bimg, dtype=np.int32)
     for line in marked:                     # dashed white centre line on the bigger two-way roads
@@ -914,6 +925,24 @@ def build_map(elements, lat0, lon0, size):
                          "benches": [(int(x), int(y)) for x, y in benches if 0 <= x < size and 0 <= y < size]}
     sea_arr = np.array(sea) > 0 if sea is not None else np.zeros((size, size), dtype=bool)
     return refine_ground(ground, bmap, sea_arr), bmap, specs, trees, counts
+
+
+def already_built(bimg, outers, size, share=0.3):
+    """Does an earlier (OpenStreetMap) building already cover this footprint? Then Overture's copy is left out."""
+    xs = [x for ring in outers for x, _ in ring]
+    ys = [y for ring in outers for _, y in ring]
+    x0, y0 = max(0, int(min(xs))), max(0, int(min(ys)))
+    x1, y1 = min(size, int(max(xs)) + 1), min(size, int(max(ys)) + 1)
+    if x1 <= x0 or y1 <= y0:
+        return True                                     # outside the square
+    mask = Image.new("1", (x1 - x0, y1 - y0), 0)
+    md = ImageDraw.Draw(mask)
+    for ring in outers:
+        md.polygon([(x - x0, y - y0) for x, y in ring], fill=1)
+    m = np.array(mask, dtype=bool)
+    if not m.any():
+        return True
+    return (np.array(bimg.crop((x0, y0, x1, y1)))[m] > 0).mean() > share
 
 
 def marked_crossing(tags):
@@ -1876,6 +1905,10 @@ def main():
     ap.add_argument("--preview-only", action="store_true", help="only make the preview picture")
     ap.add_argument("--screenshots", action="store_true", help="also draw game-style 3D pictures (needs mcrender.py next to this file)")
     ap.add_argument("--no-walk", action="store_true", help="do not make the walk-through page")
+    ap.add_argument("--no-overture", action="store_true",
+                    help="do not add buildings and land cover from Overture Maps where OpenStreetMap has none")
+    ap.add_argument("--overture-file", help="use Overture data saved earlier with --save-overture (works offline)")
+    ap.add_argument("--save-overture", help="save the Overture data downloaded for this area to a .json file")
     ap.add_argument("--tags", help='a .json file of map tags to add (colours, materials, floors) where the map has '
                                    'none, for example examples/ala/ala-tags.json')
     ap.add_argument("--textures", default="auto",
@@ -1928,10 +1961,30 @@ def main():
         sys.exit(f"--radius must be between 20 and {MAX_RADIUS} metres in this version.")
     size = -(-2 * radius // 32) * 32     # side of the square in blocks, rounded up to whole regions of chunks
 
+    downloaded = elements is None
     if elements is None:
         elements = download_osm(lat, lon, size / 2)
         if args.save_osm:
             Path(args.save_osm).write_text(json.dumps({"elements": elements}))
+    if args.overture_file or (downloaded and not args.no_overture):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))      # overture.py sits next to this file
+        import overture
+        extra, heights = [], {}
+        try:
+            if args.overture_file:
+                saved = json.loads(Path(args.overture_file).read_text())
+                extra, heights = saved["elements"], saved.get("heights", {})
+            else:
+                print("Downloading buildings and land cover the map is missing, from Overture Maps ...")
+                extra, heights = overture.fetch(lat, lon, size / 2, cache_dir=args.tile_cache)
+                if args.save_overture:
+                    Path(args.save_overture).write_text(json.dumps({"elements": extra, "heights": heights}))
+        except Exception as exc:                        # Overture only adds detail: carry on without it
+            print(f"  Overture Maps could not be read ({exc}); going on with OpenStreetMap only.")
+        filled = overture.add_heights(elements, heights)
+        elements = elements + extra
+        if extra or filled:
+            print(f"Overture: {len(extra)} map objects added, heights for {filled} OpenStreetMap buildings")
     if args.tags:
         print(f"Added tags from {args.tags} to {apply_tag_file(elements, args.tags)} map objects")
     print(f"Centre {lat:.5f}, {lon:.5f}  |  {size} x {size} blocks  |  {len(elements)} map objects")
