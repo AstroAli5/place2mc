@@ -78,6 +78,12 @@ level.dat has the same fields and types as a working Arnis world, and the app wo
 Chrome. Not yet checked: opening worlds in the real game (either edition), live downloads, real elevation,
 a real game .jar for textures, the Windows/Mac start scripts on a real computer.
 
+Real place tried so far: African Leadership Academy (Ali's school), map data fetched through Ali's Chrome
+because the cloud workspace cannot reach map servers. That run found and fixed: coordinates south of the
+equator broke the command line; the street picture's camera could stand on a grey roof; industrial land was
+a gravel desert; campus outlines (amenity=college/school) were not downloaded; campus buildings were guessed
+5-7 storeys. Overpass was over capacity that day, so downloads now fall back to api.openstreetmap.org.
+
 Known limits: sea 2 blocks deep; a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
 memory; rails and fences are flat-ground objects (no bridges or tunnels at height); no interiors, no signs.
 

@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             edition = body.get("edition", "java")
             if edition not in ("java", "bedrock", "both"):
                 return self.send(400, {"error": "Unknown edition."})
-            args = ["--center", f"{lat:.6f},{lon:.6f}", "--radius", str(radius),
+            args = [f"--center={lat:.6f},{lon:.6f}", "--radius", str(radius),
                     "--new-world", name or f"place2mc {lat:.4f}, {lon:.4f}", "--edition", edition]
             if not body.get("hills", True):
                 args.append("--flat")

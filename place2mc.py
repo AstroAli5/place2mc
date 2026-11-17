@@ -38,6 +38,7 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import sys
@@ -55,8 +56,11 @@ VERSION = "0.5"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
+# when every Overpass server is busy: OpenStreetMap's own map service (up to 50,000 points per area)
+OSM_MAP_URL = "https://api.openstreetmap.org/api/0.6/map?bbox={w:.6f},{s:.6f},{e:.6f},{n:.6f}"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 DATA_VERSION = 2975   # Minecraft 1.18.2, the oldest version every block here exists in; newer versions upgrade it on load
@@ -189,7 +193,7 @@ BLOCK_RGB = {
 
 # surface classes painted on the 2D map (one byte per block column). S_GRASS is also "nothing mapped here".
 (S_GRASS, S_FOREST, S_PARK, S_FARM, S_SAND, S_WATER, S_PAVED, S_SIDEWALK, S_ROAD, S_PATH, S_FOOT, S_PITCH, S_GRAVEL,
- S_LAWN, S_PLAZA, S_QUAY, S_LINE, S_PARKING, S_SEA) = range(19)
+ S_LAWN, S_PLAZA, S_QUAY, S_LINE, S_PARKING, S_SEA, S_INDUSTRIAL) = range(20)
 # each surface is a weighted mix of blocks, so big areas do not look like one flat colour
 SURFACE_MIX = {
     S_GRASS: [(GRASS, 1)], S_LAWN: [(GRASS, 1)], S_PARK: [(GRASS, 1)],
@@ -205,7 +209,10 @@ SURFACE_MIX = {
     S_GRAVEL: [(GRAVEL, 85), (COBBLE, 15)],
     S_PLAZA: [(SMOOTH_STONE, 55), (POLISHED_ANDESITE, 30), (ANDESITE, 15)],
     S_QUAY: [(STONE_BRICKS, 70), (COBBLE, 15), (ANDESITE, 15)],
+    # industrial land: the yards between buildings, in patches of grass, gravel and bare ground
+    S_INDUSTRIAL: [(GRASS, 62), (GRAVEL, 16), (COARSE_DIRT, 12), (ANDESITE, 10)],
 }
+PATCHY = {S_INDUSTRIAL}         # surfaces mixed in patches several blocks across, not block by block
 SURFACE_BLOCK = {surface: mix[0][0] for surface, mix in SURFACE_MIX.items()}   # main block, used for the preview
 
 # highway type -> (width in blocks, surface class, has sidewalks)
@@ -228,17 +235,21 @@ AREAS = {
     ("landuse", "orchard"): (S_PARK, 1), ("landuse", "allotments"): (S_FARM, 1),
     ("landuse", "farmland"): (S_FARM, 0), ("landuse", "farmyard"): (S_FARM, 0), ("landuse", "vineyard"): (S_FARM, 0),
     ("landuse", "commercial"): (S_PAVED, 0), ("landuse", "retail"): (S_PAVED, 0),
-    ("landuse", "industrial"): (S_GRAVEL, 0), ("landuse", "railway"): (S_GRAVEL, 0),
+    ("landuse", "industrial"): (S_INDUSTRIAL, 0), ("landuse", "railway"): (S_GRAVEL, 0),
     ("landuse", "quarry"): (S_GRAVEL, 0), ("landuse", "construction"): (S_GRAVEL, 0),
     ("natural", "bare_rock"): (S_GRAVEL, 1), ("natural", "beach"): (S_SAND, 2), ("natural", "sand"): (S_SAND, 2),
     ("leisure", "park"): (S_PARK, 2), ("leisure", "garden"): (S_PARK, 2), ("leisure", "golf_course"): (S_PARK, 2),
     ("leisure", "dog_park"): (S_PARK, 2), ("leisure", "common"): (S_PARK, 2),
     ("leisure", "pitch"): (S_PITCH, 3), ("leisure", "playground"): (S_SAND, 3), ("leisure", "track"): (S_FOOT, 3),
     ("amenity", "parking"): (S_PARKING, 3),
+    # school and college grounds: lawn, drawn over the landuse around them and under their pitches and gardens
+    ("amenity", "school"): (S_LAWN, 1), ("amenity", "college"): (S_LAWN, 1), ("amenity", "university"): (S_LAWN, 1),
+    ("amenity", "kindergarten"): (S_LAWN, 1),
     ("natural", "water"): (S_WATER, 4), ("landuse", "basin"): (S_WATER, 4), ("landuse", "reservoir"): (S_WATER, 4),
     ("waterway", "riverbank"): (S_WATER, 4), ("waterway", "dock"): (S_WATER, 4), ("leisure", "swimming_pool"): (S_WATER, 4),
 }
 
+CAMPUS_TYPES = {"school", "college", "university", "kindergarten"}
 HOUSE_TYPES = {"house", "detached", "residential", "semidetached_house", "terrace", "bungalow", "cabin",
                "farm", "static_caravan"}
 SMALL_TYPES = {"garage", "garages", "shed", "hut", "carport", "roof", "kiosk", "greenhouse"}
@@ -293,6 +304,7 @@ def overpass_query(lat, lon, radius):
   way["landuse"]; relation["landuse"];
   way["leisure"]; relation["leisure"];
   way["amenity"="parking"];
+  way["amenity"~"^(school|college|university|kindergarten)$"]; relation["amenity"~"^(school|college|university|kindergarten)$"];
   way["man_made"~"^(pier|breakwater|groyne)$"];
   node["natural"="tree"];
   node["highway"="crossing"];
@@ -307,10 +319,22 @@ def download_osm(lat, lon, radius):
     for url in OVERPASS_URLS:
         try:
             print(f"Downloading map data from {urllib.parse.urlparse(url).netloc} ...")
-            return http_get_json(url, data=data)["elements"]
+            return http_get_json(url, data=data, timeout=90)["elements"]
         except Exception as exc:  # try the next server
             last_error = exc
             print(f"  failed: {exc}")
+    m_lat, m_lon = metres_per_degree(lat)
+    r = radius + 50
+    url = OSM_MAP_URL.format(w=lon - r / m_lon, s=lat - r / m_lat, e=lon + r / m_lon, n=lat + r / m_lat)
+    try:
+        print("Downloading map data from api.openstreetmap.org instead ...")
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            return parse_osm_xml(io.BytesIO(resp.read()))[0]
+    except Exception as exc:
+        print(f"  failed: {exc}" + ("  (the area has too many map points for this service: try a smaller size)"
+                                     if "400" in str(exc) else ""))
+        last_error = exc
     sys.exit(f"Could not download map data ({last_error}). Check your internet connection and try again in a minute.")
 
 
@@ -436,8 +460,15 @@ def load_osm_file(path):
         pts = [(p["lat"], p["lon"]) for el in elements for p in el.get("geometry") or [] if p]
         bounds = (min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)) if pts else None
         return elements, bounds
-    nodes, ways, elements, bounds = {}, {}, [], None
     with open_maybe_compressed(path) as fh:
+        return parse_osm_xml(fh)
+
+
+def parse_osm_xml(fh):
+    """OpenStreetMap XML (an .osm export, or the map service's answer) -> (elements, bounds or None), in the
+    same form as an Overpass answer. Keeps tagged ways and relations, and the points place2mc uses."""
+    nodes, ways, elements, bounds = {}, {}, [], None
+    if True:
         for _, el in ET.iterparse(fh, events=("end",)):
             if el.tag == "bounds":
                 bounds = tuple(float(el.get(k)) for k in ("minlat", "minlon", "maxlat", "maxlon"))
@@ -534,7 +565,7 @@ def build_map(elements, lat0, lon0, size):
         return max(xs) >= -20 and min(xs) < size + 20 and max(ys) >= -20 and min(ys) < size + 20
 
     areas, roads, waterways, rails, buildings, trees, coast, piers, marked = [], [], [], [], [], [], [], [], []
-    crossing_ways, crossing_nodes, barriers, benches = [], [], [], []
+    crossing_ways, crossing_nodes, barriers, benches, campuses = [], [], [], [], []
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -617,11 +648,18 @@ def build_map(elements, lat0, lon0, size):
             if outers or len(line) >= 2:
                 piers.append((outers, line))
             continue
+        if tags.get("natural") == "tree_row" and kind == "way" and len(line) >= 2:
+            for (x1, y1), (x2, y2) in zip(line, line[1:]):          # a tree every 7 metres along the row
+                steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // 7))
+                trees.extend((x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps) for i in range(steps))
+            continue
         if tags.get("natural") == "coastline" and kind == "way" and len(line) >= 2:
             coast.append(line)
             continue
         if tags.get("amenity") == "parking" and tags.get("parking") in ("underground", "multi-storey"):
             continue
+        if tags.get("amenity") in CAMPUS_TYPES and outers:
+            campuses.append(outers)
         for key in ("natural", "landuse", "leisure", "waterway", "amenity"):
             hit = AREAS.get((key, tags.get(key)))
             if hit and outers:
@@ -666,6 +704,20 @@ def build_map(elements, lat0, lon0, size):
     for width, surface, sidewalk, line in roads:
         draw.line(line, fill=surface, width=width, joint="curve")
 
+    # school and college grounds: buildings there without a mapped height get the usual height of a school
+    campus_img = Image.new("1", (size, size), 0)
+    campus_draw = ImageDraw.Draw(campus_img)
+    for outers in campuses:
+        for ring in outers:
+            campus_draw.polygon(ring, fill=1)
+    campus_mask = np.array(campus_img, dtype=bool)
+
+    def on_campus(outers):
+        xs = [x for ring in outers for x, _ in ring]
+        ys = [y for ring in outers for _, y in ring]
+        cx, cy = int(sum(xs) / len(xs)), int(sum(ys) / len(ys))
+        return 0 <= cx < size and 0 <= cy < size and campus_mask[cy, cx]
+
     # buildings: an image whose pixel value is the building number (0 = no building)
     bimg = Image.new("I", (size, size), 0)
     bdraw = ImageDraw.Draw(bimg)
@@ -685,7 +737,7 @@ def build_map(elements, lat0, lon0, size):
             elif house:
                 height = 6 + pick % 2
             else:
-                low, high = FLOORS.get(btype, (2, 5) if area < 900 else (3, 7))
+                low, high = FLOORS.get(btype, (1, 3) if on_campus(outers) else (2, 5) if area < 900 else (3, 7))
                 height = (low + (pick >> 3) % (high - low + 1)) * 4 + 1
         height = min(height, 300)
         roof_shape = tags.get("roof:shape")
@@ -1031,12 +1083,16 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
 
     # ground: stone, 3 blocks of dirt, then the surface; every surface class is a weighted mix of blocks
     noise = rng.random((size, size))
+    patches = box_blur(rng.random((size, size)), 3).ravel()     # the same mixing, in patches several blocks across
+    patches[np.argsort(patches)] = (np.arange(patches.size) + 0.5) / patches.size
+    patches = patches.reshape(size, size)
     surface = np.zeros((size, size), dtype=np.uint8)
     for cls, mix in SURFACE_MIX.items():
         m = ground == cls
         if m.any():
             edges = np.cumsum([w for _, w in mix], dtype=float)
-            choice = np.minimum(np.searchsorted(edges / edges[-1], noise[m], side="right"), len(mix) - 1)
+            choice = np.minimum(np.searchsorted(edges / edges[-1], (patches if cls in PATCHY else noise)[m],
+                                                side="right"), len(mix) - 1)
             surface[m] = np.array([blk for blk, _ in mix], dtype=np.uint8)[choice]
     vol[0] = BEDROCK
     for y in range(1, int(top_of_ground.max()) + 1):
@@ -1321,7 +1377,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     kind = rng.integers(0, len(FLOWERS), (size, size))
     open_grass = (vol[g, zz, xx] == GRASS) & (vol[g + 1, zz, xx] == AIR) & ~has_building
     rates = {S_GRASS: (0.22, 0.04, 0.0, 0.02), S_PARK: (0.10, 0.01, 0.0, 0.025), S_LAWN: (0.05, 0.0, 0.0, 0.01),
-             S_FOREST: (0.16, 0.03, 0.07, 0.006)}             # short grass, tall grass, fern, flowers
+             S_FOREST: (0.16, 0.03, 0.07, 0.006), S_INDUSTRIAL: (0.10, 0.02, 0.0, 0.004)}  # grass, tall grass, fern, flowers
     plants = 0
     for cls, (short, tall, fern, flower) in rates.items():
         here = open_grass & (ground == cls)
@@ -1677,7 +1733,13 @@ def main():
     ap.add_argument("--tile-cache", default=str(Path.home() / ".place2mc" / "elevation"),
                     help="folder that keeps downloaded elevation tiles, so an area is only downloaded once")
     ap.add_argument("--force", action="store_true", help="write even if the folder has no level.dat")
-    args = ap.parse_args()
+    # coordinates south of the equator start with a minus sign, which would be read as an option:
+    # "--center -26.07,27.91" becomes "--center=-26.07,27.91"
+    argv = sys.argv[1:]
+    for i in range(len(argv) - 1):
+        if argv[i] == "--center" and re.match(r"^-?\d", argv[i + 1]):
+            argv[i:i + 2] = [f"--center={argv[i + 1]}", ""]
+    args = ap.parse_args([a for a in argv if a != ""])
 
     if not (args.place or args.center or args.osm_file):
         args.place = input("Which place? (for example: Needham, Massachusetts) ").strip()

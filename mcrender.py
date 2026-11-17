@@ -881,11 +881,13 @@ ROAD_BLOCKS = [p.ROAD, p.ROAD_WORN, p.WHITE_CONCRETE]
 
 
 def road_layers(vol):
-    """For every column: the layer of its road block, or -1 if it has none."""
-    found = np.full(vol.shape[1:], -1, dtype=np.int64)
-    for y in range(vol.shape[0]):
-        found[np.isin(vol[y], ROAD_BLOCKS)] = y
-    return found
+    """For every column: the layer of its road block, or -1 if it has none. Only a road on the ground counts:
+    the top of the unbroken stack of blocks from the bottom (flat roofs can be the same grey concrete)."""
+    first_air = np.argmax(vol == p.AIR, axis=0)
+    top = np.maximum(first_air - 1, 0)
+    zz, xx = np.indices(vol.shape[1:])
+    on_ground = (first_air > 0) & np.isin(vol[top, zz, xx], ROAD_BLOCKS)
+    return np.where(on_ground, top, -1).astype(np.int64)
 
 
 def street_camera(vol):
