@@ -63,7 +63,7 @@
   <p class="sub">Pick any real place, press Convert, and play it in Minecraft.</p>
 
   <label for="q">1. Find a place</label>
-  <div class="row"><input id="q" type="text" placeholder="Town, street or landmark"><button id="go">Search</button></div>
+  <div class="row"><input id="q" type="text" placeholder="Town, street, landmark, or lat, lon"><button id="go">Search</button></div>
   <div id="results"></div>
   <div id="where">…or click anywhere on the map.</div>
 
@@ -159,6 +159,14 @@ $("setll").onclick = () => {
 async function doSearch() {
   const q = $("q").value.trim();
   if (!q) return;
+  // coordinates typed or pasted, like "-26.07538, 27.91607": use them as they are
+  const ll = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (ll && Math.abs(+ll[1]) <= 85 && Math.abs(+ll[2]) <= 180) {
+    setCentre(+ll[1], +ll[2]);
+    if (map) map.setView([+ll[1], +ll[2]], 16);
+    $("results").innerHTML = "";
+    return;
+  }
   $("results").innerHTML = '<div><span class="spin"></span>Searching…</div>';
   try {
     const res = await fetch("/api/search?q=" + encodeURIComponent(q));
