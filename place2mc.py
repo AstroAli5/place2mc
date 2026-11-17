@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "0.6"
+VERSION = "0.7"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -168,9 +168,13 @@ ROOF_MATERIALS = [("dark_oak_planks", "dark_oak_stairs"), ("spruce_planks", "spr
                   ("deepslate_tiles", "deepslate_tile_stairs"), ("bricks", "brick_stairs"),
                   ("polished_blackstone_bricks", "polished_blackstone_brick_stairs"),
                   ("stone_bricks", "stone_brick_stairs")]
+# used only when the map (or a --tags file) gives a roof colour: green and red metal roofs, light grey sheeting
+TAG_ROOF_MATERIALS = [("dark_prismarine", "dark_prismarine_stairs"), ("red_nether_bricks", "red_nether_brick_stairs"),
+                      ("polished_andesite", "polished_andesite_stairs")]
 PITCHED_ROOFS = [block(full) for full, _ in ROOF_MATERIALS]
 ROOF_STAIRS = {block(full): [block(stairs, facing=f, half="bottom", shape="straight") for f in FACINGS]
-               for full, stairs in ROOF_MATERIALS}
+               for full, stairs in ROOF_MATERIALS + TAG_ROOF_MATERIALS}
+TAG_WALLS = [block(n) for n in ("yellow_terracotta", "light_gray_terracotta")]
 FLAT_ROOFS = [block(n) for n in ("smooth_stone", "gray_concrete", "light_gray_concrete", "stone_bricks")]
 
 assert len(BLOCKS) < 256, "too many block types for the uint8 volume"
@@ -188,7 +192,9 @@ BLOCK_RGB = {
     "andesite": (136, 136, 137), "cobblestone": (122, 122, 122), "podzol": (92, 64, 26),
     "gray_concrete_powder": (76, 81, 84), "light_gray_concrete_powder": (154, 154, 148), "iron_block": (220, 220, 220),
     "dirt": (134, 96, 67), "polished_blackstone_bricks": (48, 42, 50), "stone": (125, 125, 125),
-    "oak_fence": (168, 136, 84), "stone_brick_wall": (122, 122, 122), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
+    "dark_prismarine": (52, 92, 76), "red_nether_bricks": (69, 7, 9), "yellow_terracotta": (186, 133, 35),
+    "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "dark_prismarine_stairs": (52, 92, 76),
+    "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
 }
 
 # surface classes painted on the 2D map (one byte per block column). S_GRASS is also "nothing mapped here".
@@ -243,8 +249,8 @@ AREAS = {
     ("leisure", "pitch"): (S_PITCH, 3), ("leisure", "playground"): (S_SAND, 3), ("leisure", "track"): (S_FOOT, 3),
     ("amenity", "parking"): (S_PARKING, 3),
     # school and college grounds: lawn, drawn over the landuse around them and under their pitches and gardens
-    ("amenity", "school"): (S_LAWN, 1), ("amenity", "college"): (S_LAWN, 1), ("amenity", "university"): (S_LAWN, 1),
-    ("amenity", "kindergarten"): (S_LAWN, 1),
+    ("amenity", "school"): (S_PARK, 1), ("amenity", "college"): (S_PARK, 1), ("amenity", "university"): (S_PARK, 1),
+    ("amenity", "kindergarten"): (S_PARK, 1),
     ("natural", "water"): (S_WATER, 4), ("landuse", "basin"): (S_WATER, 4), ("landuse", "reservoir"): (S_WATER, 4),
     ("waterway", "riverbank"): (S_WATER, 4), ("waterway", "dock"): (S_WATER, 4), ("leisure", "swimming_pool"): (S_WATER, 4),
 }
@@ -546,6 +552,99 @@ def parse_height(tags):
     return None
 
 
+# colours and materials from the map's tags (building:colour, building:material, roof:colour, roof:material)
+NAMED_COLOURS = {"white": (240, 240, 240), "black": (30, 30, 30), "grey": (128, 128, 128), "gray": (128, 128, 128),
+                 "silver": (192, 192, 192), "red": (170, 40, 30), "maroon": (110, 25, 20), "brown": (120, 80, 50),
+                 "beige": (225, 210, 180), "cream": (240, 230, 200), "tan": (210, 180, 140), "yellow": (220, 190, 70),
+                 "orange": (220, 120, 40), "green": (60, 130, 60), "darkgreen": (40, 80, 50), "blue": (50, 80, 160),
+                 "navy": (30, 40, 90), "pink": (230, 170, 180), "lightgrey": (200, 200, 200), "darkgrey": (70, 70, 70)}
+WALL_MATERIALS = {"brick": "bricks", "bricks": "bricks", "stone": "stone_bricks", "concrete": "light_gray_concrete",
+                  "plaster": "white_concrete", "render": "white_concrete", "stucco": "white_concrete",
+                  "wood": "oak_planks", "timber_framing": "oak_planks", "sandstone": "smooth_sandstone",
+                  "metal": "light_gray_concrete", "glass": "light_blue_stained_glass"}
+ROOF_MATERIAL_COLOURS = {"metal": (125, 128, 130), "roof_tiles": (150, 70, 50), "tile": (150, 70, 50),
+                         "slate": (60, 60, 65), "concrete": (150, 150, 150), "thatch": (140, 110, 60),
+                         "asphalt": (60, 60, 60), "tar_paper": (60, 60, 60), "copper": (90, 140, 110)}
+
+
+def parse_colour(text):
+    text = (text or "").strip().lower().replace(" ", "").replace("_", "")
+    if text.startswith("#") and len(text) in (4, 7):
+        h = text[1:] if len(text) == 7 else "".join(c * 2 for c in text[1:])
+        try:
+            return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return None
+    return NAMED_COLOURS.get(text)
+
+
+def nearest_block(rgb, blocks):
+    """The block whose colour is closest, counting the hue twice as much as the brightness (dark green should
+    become a dark green block, not a dark grey one)."""
+    def dist(other):
+        m1, m2 = sum(rgb) / 3, sum(other) / 3
+        return sum((a - c) ** 2 + 2 * ((a - m1) - (c - m2)) ** 2 for a, c in zip(rgb, other))
+    names = [BLOCKS[b][0].split(":")[1] for b in blocks]
+    return min(zip(blocks, names), key=lambda bn: dist(BLOCK_RGB[bn[1]]))[0]
+
+
+def wall_from_tags(tags):
+    colour = parse_colour(tags.get("building:colour"))
+    if colour:
+        return nearest_block(colour, HOUSE_WALLS + BIG_WALLS + TAG_WALLS)
+    material = WALL_MATERIALS.get((tags.get("building:material") or "").lower())
+    return block(material) if material else None
+
+
+def roof_from_tags(tags, pitched):
+    colour = parse_colour(tags.get("roof:colour")) or ROOF_MATERIAL_COLOURS.get((tags.get("roof:material") or "").lower())
+    if not colour:
+        return None
+    return nearest_block(colour, list(ROOF_STAIRS) if pitched else FLAT_ROOFS + list(ROOF_STAIRS))
+
+
+def apply_tag_file(elements, path):
+    """A --tags file adds map tags the map does not have yet (they never replace tags the map has):
+    {"objects": {"way/123": {tags}}, "inside": [{"area": "way/456", "tags": {tags}}]}. "inside" gives its tags to
+    every building whose middle lies inside that area."""
+    rules = json.loads(Path(path).read_text(encoding="utf-8"))
+    by_id = {f"{el.get('type')}/{el.get('id')}": el for el in elements}
+    changed = 0
+    for key, extra in (rules.get("objects") or {}).items():
+        el = by_id.get(key)
+        if el is not None:
+            tags = el.setdefault("tags", {})
+            for k, v in extra.items():
+                tags.setdefault(k, v)
+            changed += 1
+    for rule in rules.get("inside") or []:
+        area = by_id.get(rule.get("area"))
+        ring = [(p["lat"], p["lon"]) for p in (area or {}).get("geometry") or [] if p]
+        if len(ring) < 3:
+            continue
+        for el in elements:
+            tags = el.get("tags") or {}
+            if tags.get("building") in (None, "no"):
+                continue
+            pts = [(p["lat"], p["lon"]) for p in el.get("geometry") or [] if p] or \
+                  [(p["lat"], p["lon"]) for m in el.get("members") or [] if m.get("role") != "inner"
+                   for p in m.get("geometry") or [] if p]
+            if pts and point_in_ring(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts), ring):
+                for k, v in rule.get("tags", {}).items():
+                    tags.setdefault(k, v)
+                el["tags"] = tags
+                changed += 1
+    return changed
+
+
+def point_in_ring(lat, lon, ring):
+    inside = False
+    for (y1, x1), (y2, x2) in zip(ring, ring[1:] + ring[:1]):
+        if (y1 > lat) != (y2 > lat) and lon < x1 + (lat - y1) * (x2 - x1) / (y2 - y1):
+            inside = not inside
+    return inside
+
+
 def polygon_area(pts):
     return abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]))) / 2
 
@@ -756,7 +855,15 @@ def build_map(elements, lat0, lon0, size):
         else:
             wall, windows = BIG_WALLS[pick % len(BIG_WALLS)], True
             base = BASES[(pick >> 12) % len(BASES)]
+        tag_wall = wall_from_tags(tags)
+        if tag_wall is not None:
+            wall = tag_wall
+            if base not in (STONE_BRICKS, POLISHED_ANDESITE, SMOOTH_STONE):
+                base = wall
         roofs = PITCHED_ROOFS if pitched else FLAT_ROOFS
+        tag_roof = roof_from_tags(tags, pitched)
+        if tag_roof is not None:
+            roofs = [tag_roof]
         door = (pick >> 14) % len(DOORS) if pitched else 0
         shop = (not pitched and windows and height >= 8 and btype not in PLAIN_TYPES
                 and (btype in SHOP_TYPES or "shop" in tags or "amenity" in tags))
@@ -1769,6 +1876,8 @@ def main():
     ap.add_argument("--preview-only", action="store_true", help="only make the preview picture")
     ap.add_argument("--screenshots", action="store_true", help="also draw game-style 3D pictures (needs mcrender.py next to this file)")
     ap.add_argument("--no-walk", action="store_true", help="do not make the walk-through page")
+    ap.add_argument("--tags", help='a .json file of map tags to add (colours, materials, floors) where the map has '
+                                   'none, for example examples/ala/ala-tags.json')
     ap.add_argument("--textures", default="auto",
                     help='textures for the pictures and the walk-through: "auto" (your Minecraft Java if installed, else '
                          'the Minecraft-style pack that comes with place2mc), "pack", "builtin", or a game .jar or resource pack')
@@ -1823,6 +1932,8 @@ def main():
         elements = download_osm(lat, lon, size / 2)
         if args.save_osm:
             Path(args.save_osm).write_text(json.dumps({"elements": elements}))
+    if args.tags:
+        print(f"Added tags from {args.tags} to {apply_tag_file(elements, args.tags)} map objects")
     print(f"Centre {lat:.5f}, {lon:.5f}  |  {size} x {size} blocks  |  {len(elements)} map objects")
 
     ground, bmap, specs, trees, counts = build_map(elements, lat, lon, size)

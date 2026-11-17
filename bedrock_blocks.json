@@ -557,6 +557,67 @@
 },
 "version": 18168865
 },
+"minecraft:dark_prismarine[]": {
+"name": "minecraft:dark_prismarine",
+"states": {},
+"version": 18168865
+},
+"minecraft:dark_prismarine_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:dark_prismarine_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_prismarine_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:dark_prismarine_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:dark_prismarine_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:dark_prismarine_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:dark_prismarine_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:dark_prismarine_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
 "minecraft:deepslate_tile_stairs[facing=east,half=bottom,shape=straight]": {
 "name": "minecraft:deepslate_tile_stairs",
 "states": {
@@ -703,6 +764,11 @@
 "states": {},
 "version": 18168865
 },
+"minecraft:light_gray_terracotta[]": {
+"name": "minecraft:light_gray_terracotta",
+"states": {},
+"version": 18168865
+},
 "minecraft:oak_fence[east=false,north=false,south=false,west=false]": {
 "name": "minecraft:oak_fence",
 "states": {},
@@ -825,6 +891,62 @@
 "minecraft:polished_andesite[]": {
 "name": "minecraft:polished_andesite",
 "states": {},
+"version": 18168865
+},
+"minecraft:polished_andesite_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:polished_andesite_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:polished_andesite_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:polished_andesite_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:polished_andesite_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:polished_andesite_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:polished_andesite_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:polished_andesite_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
 "version": 18168865
 },
 "minecraft:polished_blackstone_brick_stairs[facing=east,half=bottom,shape=straight]": {
@@ -1011,6 +1133,67 @@
 7
 ]
 },
+"version": 18168865
+},
+"minecraft:red_nether_brick_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:red_nether_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:red_nether_brick_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:red_nether_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:red_nether_brick_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:red_nether_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:red_nether_brick_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:red_nether_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:red_nether_bricks[]": {
+"name": "minecraft:red_nether_brick",
+"states": {},
 "version": 18168865
 },
 "minecraft:sand[]": {
@@ -1823,6 +2006,11 @@
 },
 "minecraft:white_terracotta[]": {
 "name": "minecraft:white_terracotta",
+"states": {},
+"version": 18168865
+},
+"minecraft:yellow_terracotta[]": {
+"name": "minecraft:yellow_terracotta",
 "states": {},
 "version": 18168865
 }

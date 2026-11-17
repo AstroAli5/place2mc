@@ -1,0 +1,59 @@
+{
+  "about": "Tags for African Leadership Academy that OpenStreetMap does not have yet, from ALA's campus photos: dark green metal roofs, walls of red face brick or white plaster, two storeys. Which building is brick and which is white is a guess: change building:material to brick or plaster to match the real campus. Use it with: python place2mc.py --center -26.07538,27.91607 --radius 400 --tags examples/ala/ala-tags.json",
+  "inside": [
+    {
+      "area": "way/563557480",
+      "tags": {
+        "building:levels": "2",
+        "roof:shape": "hipped",
+        "roof:colour": "#3b5b45"
+      }
+    }
+  ],
+  "objects": {
+    "relation/10826153": {
+      "building:material": "plaster",
+      "note:place2mc": "140 m west of the middle, about 3750 m2, courtyard - white walls (a guess: change brick/plaster to match)"
+    },
+    "way/563557492": {
+      "building:material": "plaster",
+      "note:place2mc": "in the middle, about 1380 m2 - white walls (a guess: change brick/plaster to match)"
+    },
+    "way/563557488": {
+      "building:material": "brick",
+      "note:place2mc": "90 m south-west of the middle, about 1140 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557491": {
+      "building:material": "brick",
+      "note:place2mc": "70 m south-west of the middle, about 1090 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557493": {
+      "building:material": "plaster",
+      "note:place2mc": "90 m north-west of the middle, about 990 m2 - white walls (a guess: change brick/plaster to match)"
+    },
+    "way/563557494": {
+      "building:material": "plaster",
+      "note:place2mc": "60 m north-west of the middle, about 990 m2 - white walls (a guess: change brick/plaster to match)"
+    },
+    "way/563557486": {
+      "building:material": "brick",
+      "note:place2mc": "100 m west of the middle, about 850 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557487": {
+      "building:material": "brick",
+      "note:place2mc": "120 m south-west of the middle, about 670 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557489": {
+      "building:material": "brick",
+      "note:place2mc": "50 m south of the middle, about 640 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557495": {
+      "building:material": "brick",
+      "note:place2mc": "50 m east of the middle, about 430 m2 - red face brick (a guess: change brick/plaster to match)"
+    },
+    "way/563557490": {
+      "building:material": "brick",
+      "note:place2mc": "80 m south-west of the middle, about 250 m2 - red face brick (a guess: change brick/plaster to match)"
+    }
+  }
+}

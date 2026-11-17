@@ -7,6 +7,7 @@ usage: python -I tests/verify_bedrock.py OSM_FILE LAT,LON RADIUS MCWORLD MCDATA_
 import io
 import json
 import struct
+import os
 import sys
 import tempfile
 import zipfile
@@ -27,6 +28,8 @@ tiles = sys.argv[7] if len(sys.argv) > 7 else None
 lat, lon = (float(v) for v in center.split(","))
 size = -(-2 * int(radius) // 32) * 32
 els, _ = p.load_osm_file(osm)
+if os.environ.get("TAGS"):          # the --tags file the world was made with
+    p.apply_tag_file(els, os.environ["TAGS"])
 ground, bmap, specs, trees, _ = p.build_map(els, lat, lon, size)
 terrain = p.make_terrain(lat, lon, size, ground, tiles) if tiles else None
 vol, _ = p.build_volume(ground, bmap, specs, trees, terrain=terrain, details=p.build_map.details)

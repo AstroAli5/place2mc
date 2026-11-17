@@ -45,13 +45,25 @@ python place2mc.py "Needham, Massachusetts" --edition both --screenshots
 python place2mc.py --center 51.5007,-0.1246 --radius 500 --edition bedrock
 ```
 
+To make a place look more like itself, give it the colours and materials the map doesn't have yet:
+`--tags file.json` adds building colours, wall and roof materials, roof shapes and floors (see
+`examples/ala/ala-tags.json`, made from African Leadership Academy's campus photos). Tags already on
+OpenStreetMap (`building:colour`, `building:material`, `roof:colour`, `roof:material`, `roof:shape`,
+`building:levels`) are used automatically.
+
 Other options: `--osm-file map.osm` (work offline from a saved map), `--flat` (no hills), `--preview-only`,
 `--textures PATH` (a game .jar or resource pack for the pictures). `python place2mc.py --help` lists them all.
+
+## Example
+
+[`examples/ala`](examples/ala): African Leadership Academy in Johannesburg, with a walk-through you can download
+and open.
 
 ## What it builds
 
 - Hills from elevation data, with dirt over stone, and the sea, lakes and rivers at their real places
-- Buildings at their mapped height (or a guess from their type and size): walls with windows and floors
+- Buildings at their mapped height (or a guess from their type and size), in the colours and materials the map
+  gives (brick, plaster, concrete, wood, green or red metal roofs, ...): walls with windows and floors
   inside, shop windows on the street side, doors, flat roofs with rooftop units, sloped roofs with eaves
 - Roads at their real width with sidewalks, centre lines, zebra crossings, street lamps, and half slabs where
   a street climbs

@@ -195,7 +195,12 @@ OLD_TEXTURE_NAMES = {"dirt_path": "grass_path", "polished_deepslate": "gray_conc
                      "deepslate_tiles": "polished_blackstone_bricks"}
 # the Minecraft-style textures that come with place2mc (Pixel Perfection CE, CC BY-SA 4.0, see its CREDITS.md)
 BUNDLED_TEXTURES = Path(__file__).resolve().parent / "textures" / "pixel-perfection-ce"
+# where that pack draws a block far from the colour the game gives it, a texture closer to the game's colour
+# (its dark prismarine is grey-blue; the game's is dark teal-green, the colour of green metal roofs)
+BUNDLED_STANDINS = {"dark_prismarine": "green_terracotta"}
 STAIRS_MATERIAL = {"brick": "bricks", "deepslate_tile": "deepslate_tiles", "stone_brick": "stone_bricks",
+                   "dark_prismarine": "dark_prismarine", "red_nether_brick": "red_nether_bricks",
+                   "polished_andesite": "polished_andesite",
                    "polished_blackstone_brick": "polished_blackstone_bricks"}
 # the game stores some textures in grey and colours them by biome; these are the plains colours
 TINTS = {"grass_block_top": (145, 189, 89), "grass_block_side_overlay": (145, 189, 89),
@@ -272,6 +277,8 @@ class TextureSource:
             base = STAIRS_MATERIAL.get(stem, stem)
         elif name.endswith("_slab"):
             base = name[:-len("_slab")]
+        if self.path == BUNDLED_TEXTURES:
+            base = BUNDLED_STANDINS.get(base, base)
         backdrop = BACKDROP["leaves"] if "leaves" in name else BACKDROP["glass"] if name == "glass" else \
             BACKDROP["door"] if "_door/" in name else BACKDROP["rail"] if name == "rail" else BACKDROP["default"]
         if "_door/" in name or name.startswith("tall_grass/"):

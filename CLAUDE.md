@@ -77,7 +77,18 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
-## State (v0.6)
+## State (v0.7)
+
+v0.7: Ali said ALA "is not ALA at all". From ALA's campus photos (africanleadershipacademy.smugmug.com) and
+an aerial view: red face brick or white walls, dark green metal pitched roofs, green covered walkways, many
+trees, inside an industrial park of unmapped warehouses. Added: building/roof colour and material tags
+(`wall_from_tags`, `roof_from_tags`, hue-weighted `nearest_block`), roof materials dark prismarine (green),
+red nether bricks (dark red), polished andesite (grey); `--tags FILE` (`apply_tag_file`) to add tags the map
+lacks; campus grounds drawn as park; `examples/ala/`. The bundled pack draws dark prismarine with green
+terracotta (BUNDLED_STANDINS), since the pack's own is grey-blue. Only 11 ALA buildings are on OpenStreetMap;
+covered walkways and the missing buildings would need map data (or Ali adding them on openstreetmap.org).
+Do not trace buildings from Esri or Google imagery into the repo (licences).
+
 
 v0.6 (asked for by Ali: "walk through it like I'm in the game", "look like Minecraft", more detail): the
 walk-through, the bundled Pixel Perfection CE textures, doors every 45 m of wall, lamps along footpaths,

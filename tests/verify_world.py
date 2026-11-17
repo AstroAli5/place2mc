@@ -3,6 +3,7 @@
 usage: python -I tests/verify_world.py OSM_FILE LAT,LON RADIUS WORLD_DIR [TILE_CACHE]
        (give TILE_CACHE if the world was built on hills from that elevation tile folder)
 """
+import os
 import io, random, struct, sys, zlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -15,6 +16,8 @@ tile_cache = sys.argv[5] if len(sys.argv) > 5 else None
 lat, lon = (float(v) for v in center.split(","))
 size = -(-2 * radius // 32) * 32
 elements, _ = p.load_osm_file(osm_file)
+if os.environ.get("TAGS"):          # the --tags file the world was made with
+    p.apply_tag_file(elements, os.environ["TAGS"])
 ground, bmap, specs, trees, counts = p.build_map(elements, lat, lon, size)
 def cache_only(z, x, y, cache_dir):
     path = Path(cache_dir) / str(z) / str(x) / f"{y}.png"
