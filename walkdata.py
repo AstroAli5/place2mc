@@ -88,7 +88,7 @@ def block_table():
 VIEWER = Path(__file__).resolve().parent / "app" / "walk.html"
 
 
-def export(vol, out_path, spawn, name, textures="auto"):
+def export(vol, out_path, spawn, name, textures="auto", credit="Map data © OpenStreetMap contributors"):
     """Write the walk-through HTML file. spawn: where the feet are, in Minecraft coordinates (x, y, z), as
     choose_spawn gives it; the centre of the built square is x=0, z=0."""
     out_path = Path(out_path)
@@ -109,7 +109,7 @@ def export(vol, out_path, spawn, name, textures="auto"):
     png = io.BytesIO()
     Image.fromarray(rgba, "RGBA").save(png, "PNG", optimize=True)
     info = {
-        "format": 1, "name": name, "sizeX": int(vol.shape[2]), "sizeZ": int(vol.shape[1]), "layers": layers,
+        "format": 1, "name": name, "credit": credit, "sizeX": int(vol.shape[2]), "sizeZ": int(vol.shape[1]), "layers": layers,
         "yMin": p.Y_MIN,
         "spawn": [spawn[0] + vol.shape[2] // 2 + 0.5, spawn[1] - p.Y_MIN, spawn[2] + vol.shape[1] // 2 + 0.5],
         "lightmap": [round(float(v), 4) for v in mcrender.LIGHTMAP],

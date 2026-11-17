@@ -59,6 +59,14 @@ Other options: `--osm-file map.osm` (work offline from a saved map), `--flat` (n
 [`examples/ala`](examples/ala): African Leadership Academy in Johannesburg, with a walk-through you can download
 and open.
 
+## Where the map is thin
+
+OpenStreetMap is detailed in many cities but thin in many places (African Leadership Academy has 11 of its
+buildings on it). So place2mc also reads **Overture Maps**, a free worldwide map that adds buildings found in
+aerial imagery (Microsoft, Google) and Esri's community maps, with heights, floors and roof details where known,
+and **ESA WorldCover** land cover (forest, shrubs, crops, bare ground) seen from space. It only adds what
+OpenStreetMap does not have, and never replaces it. Turn it off with `--no-overture`.
+
 ## What it builds
 
 - Hills from elevation data, with dirt over stone, and the sea, lakes and rivers at their real places
@@ -85,6 +93,9 @@ elevation tiles), and the game's own textures for the pictures.
 
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL). Worlds built from
   it contain OpenStreetMap data, so credit it if you share them.
+- Buildings the map lacks: [Overture Maps Foundation](https://overturemaps.org) (ODbL); land cover from
+  [ESA WorldCover](https://esa-worldcover.org) (CC BY 4.0), through Overture's base theme. The way to read them
+  (PMTiles over HTTP) follows Arnis.
 - Elevation: Terrain Tiles on AWS (Mapzen / Tilezen), from SRTM, USGS and other public sources.
 - Textures for the pictures and the walk-through when Minecraft is not installed: [Pixel Perfection CE](https://github.com/Athemis/PixelPerfectionCE)
   by XSSheep and contributors, CC BY-SA 4.0 (see `textures/pixel-perfection-ce/CREDITS.md`).

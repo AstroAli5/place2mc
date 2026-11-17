@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "0.7"
+VERSION = "0.8"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -670,7 +670,7 @@ def build_map(elements, lat0, lon0, size):
         return max(xs) >= -20 and min(xs) < size + 20 and max(ys) >= -20 and min(ys) < size + 20
 
     areas, roads, waterways, rails, buildings, trees, coast, piers, marked = [], [], [], [], [], [], [], [], []
-    crossing_ways, crossing_nodes, barriers, benches, campuses = [], [], [], [], []
+    crossing_ways, crossing_nodes, barriers, benches, campuses, industrial = [], [], [], [], [], []
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -765,6 +765,8 @@ def build_map(elements, lat0, lon0, size):
             continue
         if tags.get("amenity") in CAMPUS_TYPES and outers:
             campuses.append(outers)
+        if tags.get("landuse") == "industrial" and outers:
+            industrial.append(outers)
         for key in ("natural", "landuse", "leisure", "waterway", "amenity", "place2mc:land_cover"):
             hit = AREAS.get((key, tags.get(key)))
             if hit and outers:
@@ -816,12 +818,22 @@ def build_map(elements, lat0, lon0, size):
         for ring in outers:
             campus_draw.polygon(ring, fill=1)
     campus_mask = np.array(campus_img, dtype=bool)
+    # industrial areas: a building there with no type or height is a warehouse or a workshop
+    works_img = Image.new("1", (size, size), 0)
+    works_draw = ImageDraw.Draw(works_img)
+    for outers in industrial:
+        for ring in outers:
+            works_draw.polygon(ring, fill=1)
+    works_mask = np.array(works_img, dtype=bool)
 
-    def on_campus(outers):
+    def middle_in(mask, outers):
         xs = [x for ring in outers for x, _ in ring]
         ys = [y for ring in outers for _, y in ring]
         cx, cy = int(sum(xs) / len(xs)), int(sum(ys) / len(ys))
-        return 0 <= cx < size and 0 <= cy < size and campus_mask[cy, cx]
+        return 0 <= cx < size and 0 <= cy < size and mask[cy, cx]
+
+    def on_campus(outers):
+        return middle_in(campus_mask, outers)
 
     # buildings: an image whose pixel value is the building number (0 = no building)
     bimg = Image.new("I", (size, size), 0)
@@ -838,6 +850,10 @@ def build_map(elements, lat0, lon0, size):
         from_overture += tags.get("source:place2mc") == "overture"
         btype = tags.get("building", "yes")
         area = sum(polygon_area(r) for r in outers)
+        if btype == "yes" and area < 40:                 # a shed, a kiosk or a shack: one storey
+            btype = "shed"
+        elif btype == "yes" and area >= 150 and middle_in(works_mask, outers) and not on_campus(outers):
+            btype = "industrial"
         pick = (osm_id * 2654435761) >> 8
         house = btype in HOUSE_TYPES or (btype == "yes" and area < 250)
         height = parse_height(tags)
@@ -2022,7 +2038,10 @@ def main():
     if not args.no_walk:
         sys.path.insert(0, str(Path(__file__).resolve().parent))      # walkdata.py and mcrender.py sit next to this file
         import walkdata
-        walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures)
+        credit = "Map data © OpenStreetMap contributors" + (
+            ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "")
+        walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures,
+                               credit=credit)
         print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
         print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):

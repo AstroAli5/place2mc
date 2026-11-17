@@ -376,7 +376,7 @@ async function main() {
   const world = new World(info, runs);
   $("title").textContent = info.name;
   $("subtitle").textContent = `${info.sizeX} × ${info.sizeZ} blocks, 1 block = 1 metre. Textures: ${info.textures}.`;
-  $("credit").textContent = "Map data © OpenStreetMap contributors" + (info.textures.startsWith("Pixel") ? " · Textures: Pixel Perfection CE, CC BY-SA 4.0" : "");
+  $("credit").textContent = (info.credit || "Map data © OpenStreetMap contributors") + (info.textures.startsWith("Pixel") ? " · Textures: Pixel Perfection CE, CC BY-SA 4.0" : "");
   document.title = info.name + " – place2mc";
 
   // textures: one 16 x 16 layer per block face

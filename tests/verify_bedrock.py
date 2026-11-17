@@ -28,6 +28,11 @@ tiles = sys.argv[7] if len(sys.argv) > 7 else None
 lat, lon = (float(v) for v in center.split(","))
 size = -(-2 * int(radius) // 32) * 32
 els, _ = p.load_osm_file(osm)
+if os.environ.get("OVERTURE"):      # the --overture-file the world was made with
+    import json, overture
+    _saved = json.loads(open(os.environ["OVERTURE"]).read())
+    overture.add_heights(els, _saved.get("heights", {}))
+    els = els + _saved["elements"]
 if os.environ.get("TAGS"):          # the --tags file the world was made with
     p.apply_tag_file(els, os.environ["TAGS"])
 ground, bmap, specs, trees, _ = p.build_map(els, lat, lon, size)

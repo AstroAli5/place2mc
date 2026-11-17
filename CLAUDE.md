@@ -30,6 +30,12 @@ If the fable-playbook skill is available, follow it on every task.
 - `textures/pixel-perfection-ce/`: the Minecraft-style textures used when Minecraft Java is not installed
   (CC BY-SA 4.0, keep CREDITS.md and LICENSE.md with them). Add any texture a new block needs from
   github.com/Athemis/PixelPerfectionCE, or give it a look-alike in mcrender.OLD_TEXTURE_NAMES.
+- `overture.py`: Overture Maps (newest release from the S3 listing, PMTiles v3 over HTTP range requests, our own
+  MVT decoder): buildings OSM lacks (z14 `building` layer; ones whose `@geometry_source` is OpenStreetMap are
+  skipped but give their height/num_floors to the OSM building via `sources[].record_id`), and ESA WorldCover
+  land cover (z13 `land_cover` layer of base.pmtiles) as `place2mc:land_cover` areas. build_map skips an
+  Overture building where an OSM building already covers 30% of it. Checked by `tests/check_overture.py`
+  against mapbox-vector-tile and pmtiles (pip), and on ALA's real tiles by running it in Ali's browser with Pyodide.
 - `mcrender.py`: draws pictures the way the game does at noon (sky light levels, face shading, smooth
   lighting, fog by render distance, clouds, block shapes for stairs/slabs/doors/fences/walls/rails/lanterns).
   Uses the real textures from the user's own Minecraft Java install or a resource pack when found, built-in
@@ -77,7 +83,13 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
-## State (v0.7)
+## State (v0.8)
+
+v0.8: Ali wants "any place perfectly converted". Overture buildings + land cover (see overture.py), unlabelled
+buildings under 40 m2 become sheds, over 150 m2 in an industrial zone become industrial; the walk-through
+credits Overture and ESA when they were used. ALA: 237 buildings instead of 11, 1247 trees instead of 357.
+Offline testing: `--overture-file` (and `--save-overture`); the checks take OVERTURE=file like TAGS=file.
+
 
 v0.7: Ali said ALA "is not ALA at all". From ALA's campus photos (africanleadershipacademy.smugmug.com) and
 an aerial view: red face brick or white walls, dark green metal pitched roofs, green covered walkways, many

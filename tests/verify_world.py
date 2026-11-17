@@ -16,6 +16,11 @@ tile_cache = sys.argv[5] if len(sys.argv) > 5 else None
 lat, lon = (float(v) for v in center.split(","))
 size = -(-2 * radius // 32) * 32
 elements, _ = p.load_osm_file(osm_file)
+if os.environ.get("OVERTURE"):      # the --overture-file the world was made with
+    import json, overture
+    _saved = json.loads(open(os.environ["OVERTURE"]).read())
+    overture.add_heights(elements, _saved.get("heights", {}))
+    elements = elements + _saved["elements"]
 if os.environ.get("TAGS"):          # the --tags file the world was made with
     p.apply_tag_file(elements, os.environ["TAGS"])
 ground, bmap, specs, trees, counts = p.build_map(elements, lat, lon, size)
