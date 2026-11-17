@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>place2mc: turn any place into a Minecraft world</title>
+<link rel="stylesheet" href="/leaflet/leaflet.css">
+<style>
+  :root { --bg: #1d1f21; --panel: #2a2d31; --line: #3b3f45; --text: #e8e8e8; --dim: #a9adb3;
+          --green: #5b8c32; --green-hi: #6fa63e; --warn: #e0a83a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text);
+         display: grid; grid-template-columns: 360px 1fr; grid-template-rows: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 18px; overflow-y: auto; }
+  h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .2px; }
+  .sub { color: var(--dim); margin: 0 0 16px; font-size: 13.5px; }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: 13.5px; }
+  input[type=text] { width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line);
+                     background: #17191b; color: var(--text); font-size: 14.5px; }
+  .row { display: flex; gap: 8px; }
+  button { cursor: pointer; border: 0; border-radius: 6px; padding: 9px 12px; font-size: 14px; font-weight: 600;
+           background: #3b4048; color: var(--text); }
+  button:hover { background: #474d56; }
+  #convert { width: 100%; margin-top: 18px; padding: 13px; font-size: 16px; background: var(--green);
+             box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  #convert:hover { background: var(--green-hi); }
+  #convert:disabled { background: #4a4f55; color: var(--dim); cursor: default; }
+  #results { margin-top: 6px; }
+  #results div { padding: 6px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; color: var(--dim); }
+  #results div:hover { background: #33373c; color: var(--text); }
+  .choice { display: flex; gap: 6px; }
+  .choice label { flex: 1; margin: 0; font-weight: 500; padding: 8px; text-align: center; border-radius: 6px;
+                  border: 1px solid var(--line); cursor: pointer; font-size: 13.5px; }
+  .choice input { display: none; }
+  .choice input:checked + span { color: #fff; }
+  .choice label:has(input:checked) { background: #3d5a26; border-color: var(--green); }
+  .check { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 8px 0 0; }
+  input[type=range] { width: 100%; accent-color: var(--green-hi); }
+  .hint { color: var(--dim); font-size: 12.5px; margin-top: 4px; }
+  #where { color: var(--dim); font-size: 13px; margin-top: 6px; min-height: 18px; }
+  main { display: grid; grid-template-rows: 1fr auto; min-height: 0; }
+  #map { min-height: 0; background: #2f3337; }
+  #nomap { display: none; padding: 30px; color: var(--dim); }
+  #out { border-top: 1px solid var(--line); background: var(--panel); max-height: 48vh; overflow-y: auto; display: none; }
+  #out .inner { padding: 14px 18px; }
+  #state { font-weight: 700; margin-bottom: 8px; }
+  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--dim); white-space: pre-wrap; max-height: 140px;
+         overflow-y: auto; background: #17191b; border-radius: 6px; padding: 8px 10px; }
+  #pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
+  #pics img { width: 100%; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; }
+  .done { background: #23361a; border: 1px solid #3d5a26; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .fail { background: #3a2420; border: 1px solid #6a3a30; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--dim); border-top-color: transparent;
+          border-radius: 50%; animation: s 1s linear infinite; margin-right: 6px; vertical-align: -1px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  #big { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 9999; }
+  #big img { max-width: 94vw; max-height: 92vh; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>place2mc</h1>
+  <p class="sub">Pick any real place, press Convert, and play it in Minecraft.</p>
+
+  <label for="q">1. Find a place</label>
+  <div class="row"><input id="q" type="text" placeholder="Town, street or landmark"><button id="go">Search</button></div>
+  <div id="results"></div>
+  <div id="where">…or click anywhere on the map.</div>
+
+  <label>2. How big?</label>
+  <input id="radius" type="range" min="100" max="1000" step="50" value="300">
+  <div class="hint" id="sizeText"></div>
+
+  <label for="name">3. World name</label>
+  <input id="name" type="text" placeholder="My town">
+
+  <label>4. Which Minecraft?</label>
+  <div class="choice">
+    <label><input type="radio" name="ed" value="java" checked><span>Java</span></label>
+    <label><input type="radio" name="ed" value="bedrock"><span>Bedrock</span></label>
+    <label><input type="radio" name="ed" value="both"><span>Both</span></label>
+  </div>
+  <div class="hint" id="edHint"></div>
+
+  <label class="check"><input type="checkbox" id="hills" checked> Real hills</label>
+  <label class="check"><input type="checkbox" id="pictures" checked> Make pictures of the result</label>
+
+  <button id="convert" disabled>Convert</button>
+  <div class="hint" id="convertHint">Pick a place first.</div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div id="nomap">The map could not load (no internet?). Search for a place instead, or type coordinates:
+    <div class="row" style="max-width:420px;margin-top:8px"><input id="lat" type="text" placeholder="Latitude, e.g. 42.2810">
+    <input id="lon" type="text" placeholder="Longitude, e.g. -71.2372"><button id="setll">Use</button></div></div>
+  <section id="out"><div class="inner">
+    <div id="state"></div>
+    <div id="result"></div>
+    <div id="log"></div>
+    <div id="pics"></div>
+  </div></section>
+</main>
+<div id="big"><img alt=""></div>
+
+<script src="/leaflet/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let centre = null, map = null, square = null, marker = null, polling = null;
+
+const edHints = {
+  java: "Opens in Minecraft Java 1.21.4 or newer: it appears in your Singleplayer list.",
+  bedrock: "Makes a .mcworld file for Bedrock on Windows, Android, iPhone or iPad: open it and Minecraft imports it.",
+  both: "Makes the Java world and a .mcworld file for Bedrock."
+};
+function edition() { return document.querySelector("input[name=ed]:checked").value; }
+document.querySelectorAll("input[name=ed]").forEach(r => r.onchange = () => $("edHint").textContent = edHints[edition()]);
+$("edHint").textContent = edHints.java;
+
+function bounds() {
+  const r = +$("radius").value, dLat = r / 111320, dLon = r / (111320 * Math.cos(centre.lat * Math.PI / 180));
+  return [[centre.lat - dLat, centre.lon - dLon], [centre.lat + dLat, centre.lon + dLon]];
+}
+function showSize() {
+  const r = +$("radius").value;
+  $("sizeText").textContent = `${2 * r} m × ${2 * r} m (${2 * r} × ${2 * r} blocks)` + (r > 600 ? " — big areas take longer" : "");
+  if (map && centre) square.setBounds(bounds());
+}
+$("radius").oninput = showSize;
+
+function setCentre(lat, lon, name) {
+  centre = { lat, lon };
+  if (name) $("name").value = name.split(",")[0].trim().slice(0, 60);
+  $("where").textContent = `Centre: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  $("convert").disabled = false;
+  $("convertHint").textContent = "";
+  if (map) {
+    if (!marker) { marker = L.marker([lat, lon]).addTo(map); square = L.rectangle(bounds(), { color: "#6fa63e", weight: 2, fillOpacity: .12 }).addTo(map); }
+    marker.setLatLng([lat, lon]);
+    square.setBounds(bounds());
+  }
+  showSize();
+}
+
+try {
+  map = L.map("map", { worldCopyJump: true }).setView([30, 10], 3);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  map.on("click", e => setCentre(e.latlng.lat, e.latlng.lng));
+} catch (e) {
+  map = null; $("map").style.display = "none"; $("nomap").style.display = "block";
+}
+$("setll").onclick = () => {
+  const lat = parseFloat($("lat").value), lon = parseFloat($("lon").value);
+  if (isFinite(lat) && isFinite(lon)) setCentre(lat, lon);
+};
+
+async function doSearch() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("results").innerHTML = '<div><span class="spin"></span>Searching…</div>';
+  try {
+    const res = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const list = await res.json();
+    if (!res.ok) throw new Error(list.error || "search failed");
+    $("results").innerHTML = "";
+    if (!list.length) $("results").innerHTML = "<div>Nothing found. Try adding the country.</div>";
+    list.forEach(r => {
+      const d = document.createElement("div");
+      d.textContent = r.name;
+      d.onclick = () => { setCentre(r.lat, r.lon, r.name); if (map) map.setView([r.lat, r.lon], 15); $("results").innerHTML = ""; };
+      $("results").appendChild(d);
+    });
+  } catch (e) { $("results").innerHTML = `<div>${e.message}. Check your internet connection.</div>`; }
+}
+$("go").onclick = doSearch;
+$("q").onkeydown = e => { if (e.key === "Enter") doSearch(); };
+
+$("convert").onclick = async () => {
+  if (!centre) return;
+  $("convert").disabled = true;
+  $("out").style.display = "block";
+  $("state").innerHTML = '<span class="spin"></span>Converting… this takes a minute or two.';
+  $("result").innerHTML = ""; $("pics").innerHTML = ""; $("log").textContent = "";
+  const res = await fetch("/api/convert", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lat: centre.lat, lon: centre.lon, radius: +$("radius").value, name: $("name").value,
+                           edition: edition(), hills: $("hills").checked, pictures: $("pictures").checked }) });
+  const answer = await res.json();
+  if (!res.ok) { $("state").textContent = answer.error; $("convert").disabled = false; return; }
+  polling = setInterval(poll, 1000);
+};
+
+async function poll() {
+  const s = await (await fetch("/api/status")).json();
+  $("log").textContent = s.log.join("\n");
+  $("log").scrollTop = $("log").scrollHeight;
+  if (s.running) return;
+  clearInterval(polling);
+  $("convert").disabled = false;
+  if (s.ok) {
+    $("state").textContent = "Done!";
+    const world = s.world ? s.world.split(/[\\/]/).pop() : "";
+    let html = '<div class="done">';
+    if (s.world && edition() !== "bedrock")
+      html += `<b>Java:</b> open Minecraft → Singleplayer → <b>${world}</b>. You start on a street in the middle.<br>`;
+    if (s.mcworld)
+      html += `<b>Bedrock:</b> press <b>Add to Bedrock</b> (on Windows Minecraft opens and imports it), or send ` +
+              `<b>${s.mcworld.split(/[\\/]/).pop()}</b> to your phone or tablet and open it there.<br>`;
+    html += '<div class="row" style="margin-top:8px">';
+    if (s.mcworld) html += '<button onclick="addToBedrock()">Add to Bedrock</button>';
+    html += '<button onclick="openFolder(\'world\')">Show world folder</button>';
+    if (edition() !== "bedrock") html += '<button onclick="openFolder(\'saves\')">Show Minecraft saves</button>';
+    html += '</div><div id="bedrockNote" class="hint"></div></div>';
+    $("result").innerHTML = html;
+  } else {
+    $("state").textContent = "Something went wrong.";
+    $("result").innerHTML = '<div class="fail">The details are below. Common causes: no internet, or the map servers are busy (try again in a minute).</div>';
+  }
+  s.pictures.forEach(src => {
+    const img = document.createElement("img");
+    img.src = src; img.onclick = () => { $("big").style.display = "flex"; $("big").firstElementChild.src = src; };
+    $("pics").appendChild(img);
+  });
+}
+async function addToBedrock() {
+  const r = await (await fetch("/api/add-to-bedrock", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+  $("bedrockNote").textContent = r.imported ? "Minecraft is importing the world: look for it in Play → Worlds."
+    : "Minecraft Bedrock is not on this computer (it runs on Windows, Android, iPhone and iPad). Copy the "
+      + ".mcworld file " + (r.opened ? "from the folder that just opened " : "from the world folder ")
+      + "to that device and open it there.";
+}
+async function openFolder(which) {
+  await fetch("/api/open-folder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ which }) });
+}
+$("big").onclick = () => $("big").style.display = "none";
+showSize();
+</script>
+</body>
+</html>

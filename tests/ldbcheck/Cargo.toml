@@ -1,0 +1,14 @@
+# A second, independent reader for the Bedrock database in a .mcworld (unzip it first):
+#   cargo run --release -- "WORLD/db"
+# It prints the number of records and a hash of all of them; tests/read_leveldb.py gives the same numbers.
+# Built and run against rusty-leveldb 4.0.2 (the copy Arnis uses) and flate2 1.1.9.
+[package]
+name = "ldbcheck"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-leveldb = "4.0.2"
+flate2 = "1.1.9"
+
+[workspace]

@@ -1,0 +1,1829 @@
+{
+"minecraft:air[]": {
+"name": "minecraft:air",
+"states": {},
+"version": 18168865
+},
+"minecraft:andesite[]": {
+"name": "minecraft:andesite",
+"states": {},
+"version": 18168865
+},
+"minecraft:azure_bluet[]": {
+"name": "minecraft:azure_bluet",
+"states": {},
+"version": 18168865
+},
+"minecraft:barrier[]": {
+"name": "minecraft:barrier",
+"states": {},
+"version": 18168865
+},
+"minecraft:bedrock[]": {
+"name": "minecraft:bedrock",
+"states": {
+"infiniburn_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=east,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=east,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=north,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=north,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=south,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=south,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=west,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_door[facing=west,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:birch_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:birch_leaves[persistent=true]": {
+"name": "minecraft:birch_leaves",
+"states": {
+"persistent_bit": [
+"byte",
+1
+],
+"update_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_log[]": {
+"name": "minecraft:birch_log",
+"states": {
+"pillar_axis": [
+"string",
+"y"
+]
+},
+"version": 18168865
+},
+"minecraft:birch_planks[]": {
+"name": "minecraft:birch_planks",
+"states": {},
+"version": 18168865
+},
+"minecraft:brick_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:brick_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:brick_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:brick_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:bricks[]": {
+"name": "minecraft:brick_block",
+"states": {},
+"version": 18168865
+},
+"minecraft:coarse_dirt[]": {
+"name": "minecraft:coarse_dirt",
+"states": {},
+"version": 18168865
+},
+"minecraft:cobblestone[]": {
+"name": "minecraft:cobblestone",
+"states": {},
+"version": 18168865
+},
+"minecraft:cornflower[]": {
+"name": "minecraft:cornflower",
+"states": {},
+"version": 18168865
+},
+"minecraft:dandelion[]": {
+"name": "minecraft:dandelion",
+"states": {},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=east,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=east,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=north,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=north,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=south,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=south,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=west,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_door[facing=west,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:dark_oak_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_fence[]": {
+"name": "minecraft:dark_oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:dark_oak_planks[]": {
+"name": "minecraft:dark_oak_planks",
+"states": {},
+"version": 18168865
+},
+"minecraft:dark_oak_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:dark_oak_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:dark_oak_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:dark_oak_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:dark_oak_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:dark_oak_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:deepslate_tile_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:deepslate_tile_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:deepslate_tile_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:deepslate_tile_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:deepslate_tile_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:deepslate_tile_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:deepslate_tile_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:deepslate_tile_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:deepslate_tiles[]": {
+"name": "minecraft:deepslate_tiles",
+"states": {},
+"version": 18168865
+},
+"minecraft:dirt[]": {
+"name": "minecraft:dirt",
+"states": {},
+"version": 18168865
+},
+"minecraft:dirt_path[]": {
+"name": "minecraft:grass_path",
+"states": {},
+"version": 18168865
+},
+"minecraft:fern[]": {
+"name": "minecraft:fern",
+"states": {},
+"version": 18168865
+},
+"minecraft:glass[]": {
+"name": "minecraft:glass",
+"states": {},
+"version": 18168865
+},
+"minecraft:grass[]": {
+"name": "minecraft:short_grass",
+"states": {},
+"version": 18168865
+},
+"minecraft:grass_block[]": {
+"name": "minecraft:grass_block",
+"states": {},
+"version": 18168865
+},
+"minecraft:gravel[]": {
+"name": "minecraft:gravel",
+"states": {},
+"version": 18168865
+},
+"minecraft:gray_concrete[]": {
+"name": "minecraft:gray_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:gray_concrete_powder[]": {
+"name": "minecraft:gray_concrete_powder",
+"states": {},
+"version": 18168865
+},
+"minecraft:gray_stained_glass[]": {
+"name": "minecraft:gray_stained_glass",
+"states": {},
+"version": 18168865
+},
+"minecraft:green_concrete[]": {
+"name": "minecraft:green_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:iron_block[]": {
+"name": "minecraft:iron_block",
+"states": {},
+"version": 18168865
+},
+"minecraft:lantern[]": {
+"name": "minecraft:lantern",
+"states": {
+"hanging": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:light_blue_stained_glass[]": {
+"name": "minecraft:light_blue_stained_glass",
+"states": {},
+"version": 18168865
+},
+"minecraft:light_gray_concrete[]": {
+"name": "minecraft:light_gray_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:light_gray_concrete_powder[]": {
+"name": "minecraft:light_gray_concrete_powder",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=false,south=false,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=false,south=false,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=false,south=true,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=false,south=true,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=true,south=false,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=true,south=false,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=true,south=true,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=false,north=true,south=true,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=false,south=false,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=false,south=false,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=false,south=true,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=false,south=true,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=true,south=false,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=true,south=false,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=true,south=true,west=false]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_fence[east=true,north=true,south=true,west=true]": {
+"name": "minecraft:oak_fence",
+"states": {},
+"version": 18168865
+},
+"minecraft:oak_leaves[persistent=true]": {
+"name": "minecraft:oak_leaves",
+"states": {
+"persistent_bit": [
+"byte",
+1
+],
+"update_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:oak_log[]": {
+"name": "minecraft:oak_log",
+"states": {
+"pillar_axis": [
+"string",
+"y"
+]
+},
+"version": 18168865
+},
+"minecraft:oak_planks[]": {
+"name": "minecraft:oak_planks",
+"states": {},
+"version": 18168865
+},
+"minecraft:oxeye_daisy[]": {
+"name": "minecraft:oxeye_daisy",
+"states": {},
+"version": 18168865
+},
+"minecraft:podzol[]": {
+"name": "minecraft:podzol",
+"states": {},
+"version": 18168865
+},
+"minecraft:polished_andesite[]": {
+"name": "minecraft:polished_andesite",
+"states": {},
+"version": 18168865
+},
+"minecraft:polished_blackstone_brick_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:polished_blackstone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:polished_blackstone_brick_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:polished_blackstone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:polished_blackstone_brick_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:polished_blackstone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:polished_blackstone_brick_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:polished_blackstone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:polished_blackstone_bricks[]": {
+"name": "minecraft:polished_blackstone_bricks",
+"states": {},
+"version": 18168865
+},
+"minecraft:polished_deepslate_slab[type=bottom]": {
+"name": "minecraft:polished_deepslate_slab",
+"states": {
+"minecraft:vertical_half": [
+"string",
+"bottom"
+]
+},
+"version": 18168865
+},
+"minecraft:poppy[]": {
+"name": "minecraft:poppy",
+"states": {},
+"version": 18168865
+},
+"minecraft:quartz_block[]": {
+"name": "minecraft:quartz_block",
+"states": {
+"pillar_axis": [
+"string",
+"y"
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=ascending_east]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=ascending_north]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+4
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=ascending_south]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+5
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=ascending_west]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=east_west]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=north_east]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+9
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=north_south]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=north_west]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+8
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=south_east]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+6
+]
+},
+"version": 18168865
+},
+"minecraft:rail[shape=south_west]": {
+"name": "minecraft:rail",
+"states": {
+"rail_direction": [
+"int",
+7
+]
+},
+"version": 18168865
+},
+"minecraft:sand[]": {
+"name": "minecraft:sand",
+"states": {},
+"version": 18168865
+},
+"minecraft:smooth_sandstone[]": {
+"name": "minecraft:smooth_sandstone",
+"states": {},
+"version": 18168865
+},
+"minecraft:smooth_stone[]": {
+"name": "minecraft:smooth_stone",
+"states": {},
+"version": 18168865
+},
+"minecraft:smooth_stone_slab[type=bottom]": {
+"name": "minecraft:smooth_stone_slab",
+"states": {
+"minecraft:vertical_half": [
+"string",
+"bottom"
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=east,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=east,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"south"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=north,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=north,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"east"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=south,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=south,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"west"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=west,half=lower,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_door[facing=west,half=upper,hinge=left,open=false,powered=false]": {
+"name": "minecraft:spruce_door",
+"states": {
+"door_hinge_bit": [
+"byte",
+0
+],
+"minecraft:cardinal_direction": [
+"string",
+"north"
+],
+"open_bit": [
+"byte",
+0
+],
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_leaves[persistent=true]": {
+"name": "minecraft:spruce_leaves",
+"states": {
+"persistent_bit": [
+"byte",
+1
+],
+"update_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_log[]": {
+"name": "minecraft:spruce_log",
+"states": {
+"pillar_axis": [
+"string",
+"y"
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_planks[]": {
+"name": "minecraft:spruce_planks",
+"states": {},
+"version": 18168865
+},
+"minecraft:spruce_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:spruce_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:spruce_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:spruce_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:spruce_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:spruce_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone[]": {
+"name": "minecraft:stone",
+"states": {},
+"version": 18168865
+},
+"minecraft:stone_brick_stairs[facing=east,half=bottom,shape=straight]": {
+"name": "minecraft:stone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_stairs[facing=north,half=bottom,shape=straight]": {
+"name": "minecraft:stone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+3
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_stairs[facing=south,half=bottom,shape=straight]": {
+"name": "minecraft:stone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_stairs[facing=west,half=bottom,shape=straight]": {
+"name": "minecraft:stone_brick_stairs",
+"states": {
+"upside_down_bit": [
+"byte",
+0
+],
+"weirdo_direction": [
+"int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=low,south=low,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=low,south=low,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=low,south=none,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=low,south=none,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=none,south=low,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=none,south=low,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=none,south=none,up=false,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=low,north=none,south=none,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=low,south=low,up=false,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=low,south=low,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=low,south=none,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=low,south=none,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=none,south=low,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=none,south=low,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=none,south=none,up=true,west=low]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_brick_wall[east=none,north=none,south=none,up=true,west=none]": {
+"name": "minecraft:stone_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:stone_bricks[]": {
+"name": "minecraft:stone_bricks",
+"states": {},
+"version": 18168865
+},
+"minecraft:tall_grass[half=lower]": {
+"name": "minecraft:tall_grass",
+"states": {
+"upper_block_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:tall_grass[half=upper]": {
+"name": "minecraft:tall_grass",
+"states": {
+"upper_block_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:terracotta[]": {
+"name": "minecraft:hardened_clay",
+"states": {},
+"version": 18168865
+},
+"minecraft:water[level=0]": {
+"name": "minecraft:water",
+"states": {
+"liquid_depth": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:white_concrete[]": {
+"name": "minecraft:white_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:white_terracotta[]": {
+"name": "minecraft:white_terracotta",
+"states": {},
+"version": 18168865
+}
+}
