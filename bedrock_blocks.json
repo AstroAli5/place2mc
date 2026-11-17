@@ -234,6 +234,21 @@
 "states": {},
 "version": 18168865
 },
+"minecraft:black_concrete[]": {
+"name": "minecraft:black_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:blue_concrete[]": {
+"name": "minecraft:blue_concrete",
+"states": {},
+"version": 18168865
+},
+"minecraft:bookshelf[]": {
+"name": "minecraft:bookshelf",
+"states": {},
+"version": 18168865
+},
 "minecraft:brick_stairs[facing=east,half=bottom,shape=straight]": {
 "name": "minecraft:brick_stairs",
 "states": {
@@ -749,6 +764,16 @@
 },
 "version": 18168865
 },
+"minecraft:lantern[hanging=true]": {
+"name": "minecraft:lantern",
+"states": {
+"hanging": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
 "minecraft:light_blue_stained_glass[]": {
 "name": "minecraft:light_blue_stained_glass",
 "states": {},
@@ -766,6 +791,11 @@
 },
 "minecraft:light_gray_terracotta[]": {
 "name": "minecraft:light_gray_terracotta",
+"states": {},
+"version": 18168865
+},
+"minecraft:lime_concrete[]": {
+"name": "minecraft:lime_concrete",
 "states": {},
 "version": 18168865
 },
@@ -1135,6 +1165,11 @@
 },
 "version": 18168865
 },
+"minecraft:red_concrete[]": {
+"name": "minecraft:red_concrete",
+"states": {},
+"version": 18168865
+},
 "minecraft:red_nether_brick_stairs[facing=east,half=bottom,shape=straight]": {
 "name": "minecraft:red_nether_brick_stairs",
 "states": {
@@ -1424,6 +1459,16 @@
 "minecraft:spruce_planks[]": {
 "name": "minecraft:spruce_planks",
 "states": {},
+"version": 18168865
+},
+"minecraft:spruce_slab[type=top]": {
+"name": "minecraft:spruce_slab",
+"states": {
+"minecraft:vertical_half": [
+"string",
+"top"
+]
+},
 "version": 18168865
 },
 "minecraft:spruce_stairs[facing=east,half=bottom,shape=straight]": {
@@ -2006,6 +2051,11 @@
 },
 "minecraft:white_terracotta[]": {
 "name": "minecraft:white_terracotta",
+"states": {},
+"version": 18168865
+},
+"minecraft:yellow_concrete[]": {
+"name": "minecraft:yellow_concrete",
 "states": {},
 "version": 18168865
 },

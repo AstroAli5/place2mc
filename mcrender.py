@@ -189,6 +189,7 @@ def lantern():
 TEXTURE_NAMES = {
     "grass_block": ("grass_block_top", "grass_block_side"), "smooth_sandstone": ("sandstone_top", "sandstone_top"),
     "water": ("water_still", "water_still"), "smooth_stone": ("smooth_stone", "smooth_stone"),
+    "bookshelf": ("oak_planks", "bookshelf"),
 }
 # when a pack has no texture for a block: its older name (packs made before Minecraft 1.17), or a look-alike
 OLD_TEXTURE_NAMES = {"dirt_path": "grass_path", "polished_deepslate": "gray_concrete",
@@ -277,6 +278,8 @@ class TextureSource:
             base = STAIRS_MATERIAL.get(stem, stem)
         elif name.endswith("_slab"):
             base = name[:-len("_slab")]
+            if base in ("oak", "spruce", "birch", "dark_oak", "jungle", "acacia"):
+                base += "_planks"
         if self.path == BUNDLED_TEXTURES:
             base = BUNDLED_STANDINS.get(base, base)
         backdrop = BACKDROP["leaves"] if "leaves" in name else BACKDROP["glass"] if name == "glass" else \
@@ -494,9 +497,12 @@ def _shapes():
             boxes = [((0, 0, 0), (1, 1 / 16, 1))]
         elif name.endswith("_slab") and props.get("type") == "bottom":
             boxes = [((0, 0, 0), (1, .5, 1))]
+        elif name.endswith("_slab") and props.get("type") == "top":
+            boxes = [((0, .5, 0), (1, 1, 1))]
         elif name == "lantern":                     # same two boxes as the game: the body and the small cap
-            boxes = [((5 / 16, 1 / 16, 5 / 16), (11 / 16, 8 / 16, 11 / 16)),
-                     ((6 / 16, 8 / 16, 6 / 16), (10 / 16, 10 / 16, 10 / 16))]
+            y = 1 / 16 if (props or {}).get("hanging") == "true" else 0      # a hanging lantern sits a pixel higher
+            boxes = [((5 / 16, y, 5 / 16), (11 / 16, y + 7 / 16, 11 / 16)),
+                     ((6 / 16, y + 7 / 16, 6 / 16), (10 / 16, y + 9 / 16, 10 / 16))]
         if boxes:
             partial[i] = True
             for b, (l, h) in enumerate(boxes):

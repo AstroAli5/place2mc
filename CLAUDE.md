@@ -83,7 +83,15 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
-## State (v0.8)
+## State (v0.9)
+
+v0.9: Ali: "make me move faster", "consider the heights", "even the smallest details". Walk-through speed keys 1-4
+(×1/×2/×4/×8, touch button). Interiors (bookshelf, spruce_slab top as desk, spruce stair chairs, hanging lanterns),
+car parks (white bay lines every 3 blocks, 2x4 concrete cars with a glass top), traffic lights (highway=traffic_signals:
+post + lime/yellow/red concrete), building=roof/carport and covered=yes footways as roofs on pillars (spec field 11
+"open": no doors, no planting, no furniture). Heights: building:levels x 3 m for homes, x 4 m for others; unknown
+heights 1-3 floors; --tags "inside" rules take min_area so sheds keep their size. check_blocks now uses the game's
+real default state (it found the standing lantern drawn 1 px too high). check_details covers all of these.
 
 v0.8: Ali wants "any place perfectly converted". Overture buildings + land cover (see overture.py), unlabelled
 buildings under 40 m2 become sheds, over 150 m2 in an industrial zone become industrial; the walk-through
@@ -133,6 +141,6 @@ memory; rails and fences are flat-ground objects (no bridges or tunnels at heigh
   keep its Apache-2.0 notice.
 - Terra++ (Build The Earth mod): elevation, biomes, tree cover and ocean depth from public data; /tpll.
 
-Next ideas, roughly in order: whatever breaks in Ali's first real test; wall and roof colours from map tags;
-street-name signs and traffic lights; bridges and tunnels at the right height; light blocks for night;
-building interiors; building region by region for bigger areas.
+Next ideas, roughly in order: whatever breaks in Ali's first real test; inner walls between rooms;
+street-name signs; bridges and tunnels at the right height; light blocks for night;
+building region by region for bigger areas.

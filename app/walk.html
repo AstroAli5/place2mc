@@ -44,7 +44,7 @@
 <div id="hud"></div>
 <div id="credit"></div>
 <div id="stick" class="touch"><div id="knob"></div></div>
-<div id="buttons" class="touch"><div id="tFly">fly</div><div id="tDown">▼</div><div id="tJump">▲</div></div>
+<div id="buttons" class="touch"><div id="tSpeed">×1</div><div id="tFly">fly</div><div id="tDown">▼</div><div id="tJump">▲</div></div>
 <div id="start"><div class="box">
   <h1 id="title">Loading…</h1>
   <div class="sub" id="subtitle">A real place, built block by block.</div>
@@ -55,6 +55,7 @@
     <tr><td>Space</td><td>jump</td></tr>
     <tr><td>F or Space Space</td><td>fly on / off (Space up, Shift down)</td></tr>
     <tr><td>[ and ]</td><td>see less / farther</td></tr>
+    <tr><td>1 2 3 4</td><td>speed: normal, ×2, ×4, ×8</td></tr>
     <tr><td>J</td><td>auto-jump on / off (on)</td></tr>
     <tr><td>R</td><td>back to the start</td></tr>
     <tr><td>Esc</td><td>pause</td></tr>
@@ -469,7 +470,8 @@ async function main() {
     }
     return false;
   }
-  let autoJump = true;
+  let autoJump = true, speedLevel = 0;
+  const SPEEDS = [1, 2, 4, 8];
   function stepUp(axis, amount) {               // walk up slabs and single steps like the game (0.6 blocks)
     const p = player, y = p.y;
     for (const lift of [0.5, 0.6]) {
@@ -500,14 +502,14 @@ async function main() {
     fwd += touch.fwd; side += touch.side;
     if (fwd <= 0) p.sprint = false;
     const len = Math.hypot(fwd, side) || 1, mag = Math.min(1, Math.hypot(fwd, side));
-    const speed = p.fly ? (p.sprint ? 21.6 : 10.9) : (p.sprint ? 5.6 : 4.3);
+    const speed = (p.fly ? (p.sprint ? 21.6 : 10.9) : (p.sprint ? 5.6 : 4.3)) * SPEEDS[speedLevel];
     const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
     const wx = (fwd * sy + side * cy) / len * speed * mag, wz = (-fwd * cy + side * sy) / len * speed * mag;
     const grip = p.fly ? 8 : p.onGround ? 14 : 3;
     p.vx += (wx - p.vx) * Math.min(1, dt * grip);
     p.vz += (wz - p.vz) * Math.min(1, dt * grip);
     const up = keys.has("Space") || touch.up, down = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.down;
-    if (p.fly) p.vy = (up ? 8 : 0) - (down ? 8 : 0);
+    if (p.fly) p.vy = ((up ? 8 : 0) - (down ? 8 : 0)) * Math.sqrt(SPEEDS[speedLevel]);
     else {
       const inWater = world.get(Math.floor(p.x), Math.floor(p.y + 0.4), Math.floor(p.z)) === world.water;
       p.vy -= (inWater ? 8 : 28) * dt;
@@ -549,6 +551,7 @@ async function main() {
     if (e.code === "KeyF") player.fly = !player.fly;
     if (e.code === "KeyR") respawn();
     if (e.code === "KeyJ") autoJump = !autoJump;
+    if (/^Digit[1-4]$/.test(e.code)) speedLevel = Number(e.code.slice(5)) - 1;
     if (e.code === "BracketLeft") renderDistance = Math.max(3, renderDistance - 2);
     if (e.code === "BracketRight") renderDistance = Math.min(24, renderDistance + 2);
     keys.add(e.code);
@@ -626,6 +629,7 @@ async function main() {
       $(id).addEventListener("touchend", () => { touch[field] = false; });
     };
     hold("tJump", "up"); hold("tDown", "down");
+    $("tSpeed").addEventListener("touchstart", e => { speedLevel = (speedLevel + 1) % 4; $("tSpeed").textContent = "×" + SPEEDS[speedLevel]; e.preventDefault(); }, { passive: false });
     $("tFly").addEventListener("touchstart", e => { player.fly = !player.fly; e.preventDefault(); }, { passive: false });
   }
 
@@ -726,7 +730,7 @@ async function main() {
     const facing = dirs[((Math.round(p.yaw / (Math.PI / 2)) % 4) + 4) % 4];
     $("hud").textContent = `${info.name}\nXYZ: ${(p.x - Math.floor(world.X / 2)).toFixed(1)} / ${(p.y + info.yMin).toFixed(1)} / ${(p.z - Math.floor(world.Z / 2)).toFixed(1)}\n` +
       `Facing: ${facing}${p.fly ? "   (flying)" : p.sprint ? "   (sprinting)" : ""}${autoJump ? "" : "   auto-jump off"}` +
-      `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nRender distance: ${renderDistance} chunks   ${fps} fps`;
+      `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps`;
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

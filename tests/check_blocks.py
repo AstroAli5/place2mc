@@ -67,7 +67,10 @@ for version in sys.argv[2:]:
             values = {s["name"]: ([str(v) for v in s["values"]] if s["type"] == "enum" else
                                   ["true", "false"] if s["type"] == "bool" else
                                   [str(n) for n in range(s["num_values"])]) for s in info["states"]}
-            full = {k: values[k][0] for k in order}                 # the game's defaults are the first value
+            # the game's default state (what a block written without properties becomes), decoded from its number
+            rest, full = info["defaultState"] - info["minStateId"], {}
+            for k in reversed(order):                               # the last property changes fastest
+                rest, full[k] = divmod(rest, len(values[k]))[0], values[k][rest % len(values[k])]
             if "waterlogged" in full:
                 full["waterlogged"] = "false"
             if name.endswith("_fence"):

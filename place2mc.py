@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "0.8"
+VERSION = "0.9"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -130,6 +130,13 @@ FACINGS = ("north", "south", "west", "east")          # index 0..3, used for sta
 NORTH, SOUTH, WEST, EAST = range(4)
 LAMP_POST = block("dark_oak_fence")
 LANTERN = block("lantern")
+# inside buildings, parked cars, traffic lights
+BOOKSHELF = block("bookshelf")
+DESK = block("spruce_slab", type="top")
+CEILING_LAMP = block("lantern", hanging="true")
+CAR_COLOURS = [block(n) for n in ("white_concrete", "black_concrete", "red_concrete", "blue_concrete", "light_gray_concrete",
+                                  "white_concrete", "black_concrete", "light_gray_concrete")]
+SIGNAL_LIGHTS = [block("lime_concrete"), block("yellow_concrete"), block("red_concrete")]    # green, amber, red
 DOORS = [{(f, half): block(name, facing=f, half=half, hinge="left", open="false", powered="false")
           for f in FACINGS for half in ("lower", "upper")}
          for name in ("dark_oak_door", "spruce_door", "birch_door")]
@@ -193,7 +200,9 @@ BLOCK_RGB = {
     "gray_concrete_powder": (76, 81, 84), "light_gray_concrete_powder": (154, 154, 148), "iron_block": (220, 220, 220),
     "dirt": (134, 96, 67), "polished_blackstone_bricks": (48, 42, 50), "stone": (125, 125, 125),
     "dark_prismarine": (52, 92, 76), "red_nether_bricks": (69, 7, 9), "yellow_terracotta": (186, 133, 35),
-    "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "dark_prismarine_stairs": (52, 92, 76),
+    "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "bookshelf": (117, 94, 59),
+    "spruce_slab": (114, 84, 48), "black_concrete": (8, 10, 15), "red_concrete": (142, 33, 33),
+    "lime_concrete": (94, 169, 24), "yellow_concrete": (241, 175, 21), "blue_concrete": (45, 47, 143), "dark_prismarine_stairs": (52, 92, 76),
     "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
 }
 
@@ -270,8 +279,8 @@ SHOP_TYPES = {"yes", "retail", "commercial", "apartments", "office", "hotel", "m
 # ground that people walk or drive on, used to put doors, shop windows and lamps on the street side
 STREET_SURFACES = (S_ROAD, S_LINE, S_SIDEWALK, S_FOOT, S_PLAZA, S_PAVED, S_PARKING, S_PATH, S_QUAY)
 # number of floors (lowest, highest) to guess when the map gives no height; one floor is 4 blocks
-FLOORS = {"apartments": (4, 8), "office": (4, 9), "hotel": (5, 9), "commercial": (2, 4), "retail": (1, 3),
-          "industrial": (2, 3), "warehouse": (2, 3), "school": (2, 4), "university": (3, 5), "hospital": (4, 7),
+FLOORS = {"apartments": (3, 6), "office": (3, 6), "hotel": (3, 7), "commercial": (1, 3), "retail": (1, 2),
+          "industrial": (2, 3), "warehouse": (2, 3), "school": (1, 3), "university": (2, 4), "hospital": (2, 5),
           "civic": (2, 4), "public": (2, 4), "church": (3, 4), "chapel": (2, 2), "cathedral": (5, 6),
           "mosque": (3, 4), "train_station": (2, 3), "barn": (2, 2)}
 
@@ -321,6 +330,7 @@ def overpass_query(lat, lon, radius):
   node["natural"="tree"];
   node["highway"="crossing"];
   node["amenity"="bench"];
+  node["highway"="traffic_signals"];
 );
 out geom;"""
 
@@ -488,7 +498,7 @@ def parse_osm_xml(fh):
                 nid, lat, lon = int(el.get("id")), float(el.get("lat")), float(el.get("lon"))
                 nodes[nid] = (lat, lon)
                 tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-                if tags.get("natural") == "tree" or tags.get("highway") == "crossing" or tags.get("amenity") == "bench":
+                if tags.get("natural") == "tree" or tags.get("highway") in ("crossing", "traffic_signals") or tags.get("amenity") == "bench":
                     elements.append({"type": "node", "id": nid, "lat": lat, "lon": lon, "tags": tags})
                 el.clear()
             elif el.tag == "way":
@@ -549,13 +559,16 @@ def parse_height(tags):
                 return max(3, round(float(text.replace("m", "").split()[0])))
             except (ValueError, IndexError):
                 pass
-    raw = tags.get("building:levels")
-    if raw:
-        try:
-            return max(3, round(float(raw.replace(",", ".")) * 3) + 1)
-        except ValueError:
-            pass
     return None
+
+
+def parse_levels(tags):
+    """building:levels as a whole number of floors above ground, or None."""
+    try:
+        levels = round(float(tags.get("building:levels", "").replace(",", ".")))
+    except ValueError:
+        return None
+    return max(1, min(levels, 100)) if levels > 0 else None
 
 
 # colours and materials from the map's tags (building:colour, building:material, roof:colour, roof:material)
@@ -611,8 +624,9 @@ def roof_from_tags(tags, pitched):
 
 def apply_tag_file(elements, path):
     """A --tags file adds map tags the map does not have yet (they never replace tags the map has):
-    {"objects": {"way/123": {tags}}, "inside": [{"area": "way/456", "tags": {tags}}]}. "inside" gives its tags to
-    every building whose middle lies inside that area."""
+    {"objects": {"way/123": {tags}}, "inside": [{"area": "way/456", "tags": {tags}, "min_area": 60}]}. "inside" gives
+    its tags to every building whose middle lies inside that area (and, with min_area, whose footprint is at least
+    that many square metres, so sheds and kiosks keep their own size)."""
     rules = json.loads(Path(path).read_text(encoding="utf-8"))
     by_id = {f"{el.get('type')}/{el.get('id')}": el for el in elements}
     changed = 0
@@ -635,6 +649,11 @@ def apply_tag_file(elements, path):
             pts = [(p["lat"], p["lon"]) for p in el.get("geometry") or [] if p] or \
                   [(p["lat"], p["lon"]) for m in el.get("members") or [] if m.get("role") != "inner"
                    for p in m.get("geometry") or [] if p]
+            if len(pts) >= 3 and rule.get("min_area"):
+                k = 111320 * math.cos(math.radians(pts[0][0]))
+                metres = [((q[1] - pts[0][1]) * k, (q[0] - pts[0][0]) * 110540) for q in pts]
+                if polygon_area(metres) < rule["min_area"]:
+                    continue
             if pts and point_in_ring(sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts), ring):
                 for k, v in rule.get("tags", {}).items():
                     tags.setdefault(k, v)
@@ -670,7 +689,7 @@ def build_map(elements, lat0, lon0, size):
         return max(xs) >= -20 and min(xs) < size + 20 and max(ys) >= -20 and min(ys) < size + 20
 
     areas, roads, waterways, rails, buildings, trees, coast, piers, marked = [], [], [], [], [], [], [], [], []
-    crossing_ways, crossing_nodes, barriers, benches, campuses, industrial = [], [], [], [], [], []
+    crossing_ways, crossing_nodes, barriers, benches, campuses, industrial, signals = [], [], [], [], [], [], []
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -681,6 +700,8 @@ def build_map(elements, lat0, lon0, size):
                 crossing_nodes.append(px((el["lat"], el["lon"])))
             elif tags.get("amenity") == "bench":
                 benches.append(px((el["lat"], el["lon"])))
+            elif tags.get("highway") == "traffic_signals":
+                signals.append(px((el["lat"], el["lon"])))
             continue
         if kind == "way":
             geom = [(p["lat"], p["lon"]) for p in el.get("geometry") or [] if p]
@@ -712,6 +733,24 @@ def build_map(elements, lat0, lon0, size):
         highway = tags.get("highway")
         if highway and kind == "way" and len(line) >= 2:
             base = highway[:-5] if highway.endswith("_link") else highway
+            if (tags.get("covered") == "yes" and base in ("footway", "path", "pedestrian", "cycleway", "steps")
+                    and tags.get("tunnel") in (None, "no") and not tags.get("layer", "0").startswith("-")
+                    and tags.get("indoor") in (None, "no")):
+                # a covered walkway: a roof on pillars over the path, one rectangle per straight stretch
+                pieces = []
+                for (x1, y1), (x2, y2) in zip(line, line[1:]):
+                    length = math.hypot(x2 - x1, y2 - y1)
+                    if length < 0.5:
+                        continue
+                    ux, uy = (x2 - x1) / length, (y2 - y1) / length
+                    nx, ny = -uy * 1.6, ux * 1.6
+                    a, b = (x1 - ux * 0.5, y1 - uy * 0.5), (x2 + ux * 0.5, y2 + uy * 0.5)
+                    rect = [(a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny), (b[0] - nx, b[1] - ny), (a[0] - nx, a[1] - ny)]
+                    pieces.append(rect + rect[:1])
+                if pieces:
+                    roof_tags = {k: v for k, v in tags.items() if k.startswith("roof:")}
+                    buildings.append((el.get("id", 0), dict(roof_tags, building="roof", **{"place2mc:walkway": "yes"}),
+                                      pieces, [], False))
             if base in ROADS and tags.get("tunnel") != "yes":
                 width, surface, sidewalk = ROADS[base]
                 if tags.get("area") == "yes" and closed:
@@ -840,9 +879,10 @@ def build_map(elements, lat0, lon0, size):
     bdraw = ImageDraw.Draw(bimg)
     # per building: height, wall, roof, pitched roof, windows, floor height, glass, base/trim block, window spacing
     # ... door kind (index into DOORS), shop windows on the ground floor
-    specs = [(0, AIR, AIR, 0, 0, 3, GLASS, AIR, 4, 0, 0)]
+    specs = [(0, AIR, AIR, 0, 0, 3, GLASS, AIR, 4, 0, 0, 0)]
     # OpenStreetMap's buildings first (relations first, so buildings inside a courtyard are kept), then Overture's
-    buildings.sort(key=lambda b: (b[1].get("source:place2mc") == "overture", not b[4]))
+    # (covered walkways before buildings, so a building drawn over one keeps its own walls)
+    buildings.sort(key=lambda b: (b[1].get("source:place2mc") == "overture", "place2mc:walkway" not in b[1], not b[4]))
     from_overture = 0
     for osm_id, tags, outers, inners, _ in buildings:
         if tags.get("source:place2mc") == "overture" and already_built(bimg, outers, size):
@@ -856,14 +896,19 @@ def build_map(elements, lat0, lon0, size):
             btype = "industrial"
         pick = (osm_id * 2654435761) >> 8
         house = btype in HOUSE_TYPES or (btype == "yes" and area < 250)
-        height = parse_height(tags)
+        height, levels = parse_height(tags), parse_levels(tags)
+        homes = house or btype in ("apartments", "residential", "dormitory")
+        if height is None and levels:   # floors of homes are about 3 m from floor to floor, others about 4 m
+            height = levels * (3 if homes else 4) + 1
         if height is None:              # the map does not say, so guess from the kind and size of building
             if btype in SMALL_TYPES:
                 height = 3
-            elif house:
-                height = 6 + pick % 2
+            elif house:                 # one storey for small houses, one or two for bigger ones
+                height = 4 if area < 120 or pick % 3 else 7
             else:
-                low, high = FLOORS.get(btype, (1, 3) if on_campus(outers) else (2, 5) if area < 900 else (3, 7))
+                # most buildings in the world have one to three floors: small ones low, big ones a little higher
+                low, high = FLOORS.get(btype, (1, 3) if on_campus(outers) else (1, 2) if area < 600 else
+                                       (2, 3) if area < 2500 else (2, 5))
                 height = (low + (pick >> 3) % (high - low + 1)) * 4 + 1
         height = min(height, 300)
         roof_shape = tags.get("roof:shape")
@@ -882,6 +927,8 @@ def build_map(elements, lat0, lon0, size):
         else:
             wall, windows = BIG_WALLS[pick % len(BIG_WALLS)], True
             base = BASES[(pick >> 12) % len(BASES)]
+        if levels and btype not in SMALL_TYPES:   # the map says how many floors: make each floor that tall
+            storey = max(3, min(6, round((height - 1) / levels)))
         tag_wall = wall_from_tags(tags)
         if tag_wall is not None:
             wall = tag_wall
@@ -895,13 +942,13 @@ def build_map(elements, lat0, lon0, size):
         shop = (not pitched and windows and height >= 8 and btype not in PLAIN_TYPES
                 and (btype in SHOP_TYPES or "shop" in tags or "amenity" in tags))
         specs.append((height, wall, roofs[(pick >> 4) % len(roofs)], pitched, windows, storey, glass, base, spacing,
-                      door, shop))
+                      door, shop, btype in ("roof", "carport")))
         fill(bimg, bdraw, len(specs) - 1, outers, inners)
 
     counts = {"buildings": len(specs) - 1, "roads": len(roads), "areas": len(areas), "coastlines": len(coast),
               "waterways": len(waterways), "railways": len(rails), "mapped trees": len(trees),
               "zebra crossings": len(crossing_ways) + len(crossing_nodes), "fences, walls and hedges": len(barriers),
-              "benches": len(benches), "buildings from Overture": from_overture}
+              "benches": len(benches), "traffic lights": len(signals), "buildings from Overture": from_overture}
     ground = np.array(ground_img, dtype=np.uint8)
     bmap = np.array(bimg, dtype=np.int32)
     for line in marked:                     # dashed white centre line on the bigger two-way roads
@@ -938,6 +985,7 @@ def build_map(elements, lat0, lon0, size):
         for x, y in line_cells(line, size):
             track[y, x] = True
     build_map.details = {"barriers": (barrier_kind, barrier_tall), "rails": track,
+                         "signals": [(int(x), int(y)) for x, y in signals if 0 <= x < size and 0 <= y < size],
                          "benches": [(int(x), int(y)) for x, y in benches if 0 <= x < size and 0 <= y < size]}
     sea_arr = np.array(sea) > 0 if sea is not None else np.zeros((size, size), dtype=bool)
     return refine_ground(ground, bmap, sea_arr), bmap, specs, trees, counts
@@ -1199,6 +1247,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     pitched, windows, storey = per_pixel(3, bool), per_pixel(4, bool), per_pixel(5)
     glass, trim_block, spacing = per_pixel(6, np.uint8), per_pixel(7, np.uint8), per_pixel(8)
     shop = per_pixel(10, bool)
+    is_open = per_pixel(11, bool)                      # a roof on pillars: shelters, carports, covered walkways
     has_building = bmap > 0
     if terrain is None:
         g, sea_level = np.full((size, size), GROUND, dtype=np.int32), GROUND
@@ -1283,8 +1332,9 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     window_cols = walls & windows & (along % spacing < 2)
     shop_front = walls & shop & near_street & ~corner & (along % 4 != 0)
     floor_block = np.where(pitched, HOUSE_FLOOR, SMOOTH_STONE).astype(np.uint8)
+    pillar = corner | (along % 4 == 0)
     for k in range(int(height.max())):
-        m = walls & (height > k)
+        m = walls & (height > k) & (~is_open | pillar)
         if not m.any():
             break
         value = wall.copy()
@@ -1302,7 +1352,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
             vol[(floor0 + k)[f], zz[f], xx[f]] = floor_block[f]
 
     # doors: one per building, in a straight stretch of wall, on the street side when there is one
-    door_ok = walls & ~corner & (height >= 4) & (facing >= 0)
+    door_ok = walls & ~corner & (height >= 4) & (facing >= 0) & ~is_open
     cells = rng.permutation(np.flatnonzero(door_ok))
     cz_, cx_ = np.divmod(cells, size)
     # facing points into the building, so the outside cell is one step the other way (north is -z)
@@ -1336,6 +1386,43 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         if not has_building[oz, ox]:
             doorways.append((y, oz, ox))
         doors_placed += 1
+
+    # inside: on every floor, bookshelves and desks with chairs along the walls and a lamp hanging in the middle of
+    # each room, so the rooms show through the windows; nothing within two blocks of a door
+    near_door = np.zeros((size, size), dtype=bool)
+    for cell, _ in chosen:
+        z, x = divmod(int(cell), size)
+        near_door[max(0, z - 2):z + 3, max(0, x - 2):x + 3] = True
+    inside = inner & windows & ~is_open & ~near_door
+    wall_dirs = [nb > 0 for nb in neighbours((walls & has_building).astype(np.int32))]      # wall to the N, S, W, E
+    by_wall = inside & np.logical_or.reduce(wall_dirs)
+    middle = inside & ~(window_fraction(walls, 2) > 0)
+    shelf = by_wall & ((xx * 3 + zz * 5) % 11 < 2)
+    desk = by_wall & ~shelf & ((xx * 7 + zz * 3) % 9 == 4)
+    lamp = middle & (xx % 6 == 3) & (zz % 6 == 3)
+    seat = ROOF_STAIRS[block("spruce_planks")]
+    furnished = 0
+    for j in range(int((height // np.maximum(storey, 1)).max()) + 1):
+        lo = j * storey                                # the floor of this storey, counted from the first layer inside
+        ok = has_building & (lo + 2 < height)
+        y = floor0 + lo + (j > 0)                      # the first free layer of the room
+        room_top = np.minimum(floor0 + lo + storey - 1, floor0 + height - 1)
+        for mask, blocks_up in ((shelf, 2), (desk, 1)):
+            m = mask & ok
+            for up in range(blocks_up if mask is shelf else 1):
+                mm = m & (y + up < room_top) & (vol[np.minimum(y + up, layers - 1), zz, xx] == AIR)
+                vol[(y + up)[mm], zz[mm], xx[mm]] = BOOKSHELF if mask is shelf else DESK
+                furnished += int(mm.sum())
+        for d, (dz, dx) in enumerate(((-1, 0), (1, 0), (0, -1), (0, 1))):           # a chair in front of each desk
+            m = desk & ok & wall_dirs[d]
+            cz, cx = np.clip(zz - dz, 0, size - 1), np.clip(xx - dx, 0, size - 1)
+            yy = y
+            free = m & inside[cz, cx] & (vol[np.minimum(yy, layers - 1), cz, cx] == AIR)
+            vol[yy[free], cz[free], cx[free]] = seat[(SOUTH, NORTH, EAST, WEST)[d]]
+        m = lamp & ok & (room_top > y + 1)
+        m &= vol[np.minimum(room_top, layers - 1), zz, xx] == AIR
+        vol[room_top[m], zz[m], xx[m]] = CEILING_LAMP
+        furnished += int(m.sum())
 
     # flat roofs: one layer, a raised edge on the taller ones, and rooftop units (a stair head, air conditioning)
     m = has_building & ~pitched
@@ -1493,6 +1580,52 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         vol[g[m] + 1, z_i, x_i] = np.where(driving[m], ROAD_SLAB, PAVING_SLAB)
         slabs += len(z_i)
 
+    # car parks: white lines between bays three blocks wide, in rows five deep with a driving lane between, and
+    # parked cars in about half of the bays
+    park = (ground == S_PARKING) & ~has_building & ~water
+    cars = 0
+    if park.any():
+        band = zz % 13
+        in_bay = (band < 5) | (band >= 8)
+        line_cells = park & in_bay & (xx % 3 == 0)
+        vol[g[line_cells], zz[line_cells], xx[line_cells]] = WHITE_CONCRETE
+        for z, x in zip(*np.nonzero(park & (xx % 3 == 1) & ((band == 0) | (band == 8)))):
+            if z + 4 > size or x + 2 > size or rng.random() > 0.5:
+                continue
+            foot = (slice(z, z + 4), slice(x, x + 2))
+            y = int(g[z, x]) + 1
+            if not park[foot].all() or (g[foot] != g[z, x]).any() or (vol[y:y + 2][(slice(None),) + foot] != AIR).any():
+                continue
+            colour = CAR_COLOURS[int(rng.integers(0, len(CAR_COLOURS)))]
+            vol[y, z:z + 4, x:x + 2] = colour                 # the body
+            vol[y + 1, z + 1:z + 3, x:x + 2] = GLASS           # the cabin
+            cars += 1
+
+    # traffic lights from the map: a pole beside the road with a signal head on top
+    signals = 0
+    road_or_building = np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) | has_building | water
+    for sx, sz in details.get("signals", []):
+        best = None
+        for r in range(1, 9):
+            for dz in range(-r, r + 1):
+                for dx in (-r, r) if abs(dz) != r else range(-r, r + 1):
+                    z, x = sz + dz, sx + dx
+                    if 0 <= z < size and 0 <= x < size and not road_or_building[z, x] and road_or_building[
+                            max(0, z - 1):z + 2, max(0, x - 1):x + 2].any():
+                        best = (z, x)
+                        break
+                if best:
+                    break
+            if best:
+                break
+        if best:
+            z, x = best
+            y = int(g[z, x]) + 1
+            if (vol[y:y + 6, z, x] == AIR).all():
+                vol[y:y + 3, z, x] = LAMP_POST
+                vol[y + 3:y + 6, z, x] = SIGNAL_LIGHTS
+                signals += 1
+
     # benches from the map: a wooden stair block with its back to the nearest building, or away from the road
     benches = 0
     seat = ROOF_STAIRS[block("spruce_planks")]
@@ -1552,7 +1685,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
                 vol[y, z, x] = TREES[0][1]
 
     # planting along the walls of buildings that stand on lawns: bushes and flowers, not in front of doors
-    beside = lawn & (window_fraction(has_building, 1) > 0) & ~(window_fraction(has_building, 0) > 0)
+    closed = has_building & ~is_open                   # not round shelters and covered walkways: people walk in there
+    beside = lawn & ~has_building & (window_fraction(closed, 1) > 0) & ~(window_fraction(has_building & is_open, 1) > 0)
     for y, oz, ox in doorways:
         beside[max(0, oz - 1):oz + 2, max(0, ox - 1):ox + 2] = False
     roll_b = rng.random((size, size))
@@ -1596,7 +1730,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
                                                        # placed later can fill it
     build_volume.stats = {"trees": planted, "street lamps": lamps, "doors": doors_placed, "plants and flowers": plants,
                           "half slabs on slopes": slabs, "rails": rails_laid, "fence, wall and hedge blocks": barrier_cells,
-                          "benches": benches, "bushes and flowers by buildings": landscaping}
+                          "benches": benches, "bushes and flowers by buildings": landscaping,
+                          "pieces of furniture and lamps inside": furnished, "parked cars": cars, "traffic lights": signals}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 

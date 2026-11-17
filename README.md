@@ -23,8 +23,9 @@ otherwise they use the Minecraft-style Pixel Perfection CE textures that come wi
 3. Double-click **start-windows.bat** (Windows) or **start-mac.command** (Mac). A page opens in your browser.
 4. Search for a place or click on the map, choose the size and the edition, and press **Convert**.
 5. When it says Done:
-   - **Walk around**: press **Walk around** and walk with W A S D and the mouse, right in the browser. The file
-     `Walk around <name>.html` in the world folder does the same on any computer or phone: just open it.
+   - **Walk around**: press **Walk around** and walk with W A S D and the mouse, right in the browser. Keys 1 to 4
+     set the speed (normal, ×2, ×4, ×8), F flies. The file `Walk around <name>.html` in the world folder does the
+     same on any computer or phone: just open it.
    - **Java**: open Minecraft, go to Singleplayer, and the new world is in the list. You start on a street in the middle.
    - **Bedrock**: press **Add to Bedrock** (on Windows, Minecraft opens and imports the world), or send the
      `.mcworld` file to your phone or tablet and open it there.
@@ -50,6 +51,12 @@ To make a place look more like itself, give it the colours and materials the map
 `examples/ala/ala-tags.json`, made from African Leadership Academy's campus photos). Tags already on
 OpenStreetMap (`building:colour`, `building:material`, `roof:colour`, `roof:material`, `roof:shape`,
 `building:levels`) are used automatically.
+
+What gets built besides streets, buildings and hills: rooms with bookshelves, desks, chairs and hanging lanterns on
+every floor (you see them through the windows), doors, car parks with bay lines and parked cars, traffic lights,
+shelters and covered walkways on pillars, zebra crossings, rails, fences, walls, hedges, benches, street lamps,
+trees, bushes and flowers. Heights come from the map (`height`, `building:levels`, Overture); when it says nothing,
+buildings get one to three floors depending on what they are and how big.
 
 Other options: `--osm-file map.osm` (work offline from a saved map), `--flat` (no hills), `--preview-only`,
 `--textures PATH` (a game .jar or resource pack for the pictures). `python place2mc.py --help` lists them all.
