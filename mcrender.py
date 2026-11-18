@@ -12,6 +12,7 @@ Nothing from the game is copied anywhere; the textures are only read to draw the
 
 Use it through place2mc:   python place2mc.py "Some place" --world PATH --screenshots
 """
+import datetime
 import io
 import math
 import os
@@ -753,25 +754,138 @@ def sky_light(vol):
     return light
 
 
-def sky_colour(origin, direction):
+# --------------------------------------------------------------------------- the sun, like the walk-through's shaders
+
+TIMES = {"morning": 8.5, "midday": 12.5, "afternoon": 15.5, "sunset": None, "night": 22.0}
+
+
+def _smooth(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def _mix(a, b, t):
+    a, b = np.asarray(a, dtype=np.float32), np.asarray(b, dtype=np.float32)
+    return a + (b - a) * np.float32(t)
+
+
+def sun_direction(lat, hour, day_of_year):
+    """Direction to the sun (x east, y up, z south, like Minecraft) at a solar time of day, at a latitude, on a day
+    of the year: the usual formulas for the sun's declination and hour angle."""
+    decl = math.radians(-23.44) * math.cos(2 * math.pi / 365 * (day_of_year + 10))
+    h, phi = math.radians((hour - 12) * 15), math.radians(lat)
+    east = -math.cos(decl) * math.sin(h)
+    north = math.sin(decl) * math.cos(phi) - math.cos(decl) * math.cos(h) * math.sin(phi)
+    up = math.sin(decl) * math.sin(phi) + math.cos(decl) * math.cos(h) * math.cos(phi)
+    return np.array([east, up, -north])
+
+
+class Look:
+    """The light at one place at one time of day: the real sun's direction there on that date, and the colours of
+    the sunlight, the shade and the sky. The same numbers as the walk-through's shaders."""
+
+    def __init__(self, lat=45.0, time="afternoon", day_of_year=None):
+        self.lat, self.time = lat, time
+        self.day_of_year = day_of_year or datetime.date.today().timetuple().tm_yday
+        hour = TIMES[time]
+        if hour is None:                              # sunset: the sun 3 degrees above the horizon in the evening
+            hour = next((hr for hr in np.arange(12, 22, 0.02) if self.sun(hr)[1] < math.sin(math.radians(3))), 18.0)
+        self.hour = float(hour)
+        sun = self.sun(self.hour)
+        e = sun[1]
+        self.day, low, self.night = _smooth(-0.1, 0.22, e), 1 - _smooth(0.04, 0.5, e), 1 - _smooth(-0.12, 0.02, e)
+        self.zenith = _mix(_mix(ZENITH, [0.28, 0.4, 0.72], low * 0.8), [0.006, 0.01, 0.03], self.night)
+        self.horizon = _mix(_mix(HORIZON, [1.0, 0.62, 0.36], low * 0.85), [0.03, 0.04, 0.08], self.night)
+        self.sun_colour = _mix([1.1, 1.02, 0.9], [1.2, 0.58, 0.26], low) * np.float32(_smooth(-0.02, 0.1, e) * 1.3)
+        self.ambient = _mix(_mix([0.3, 0.38, 0.56], [0.42, 0.34, 0.42], low), [0.06, 0.08, 0.14], self.night)
+        moon = -self.sun(self.hour - 12)
+        moon = np.array([moon[0] * 0.6, max(0.55, abs(moon[1])), moon[2] * 0.6])
+        self.moon_dir = moon / np.linalg.norm(moon)
+        self.sun_dir, self.sun_disc = sun, sun
+        if e < 0.02:                                  # after dark the moon lights the place, weak and blue
+            self.sun_dir = self.moon_dir
+            self.sun_colour = self.sun_colour + np.array([0.2, 0.26, 0.42], dtype=np.float32) * np.float32(self.night * 0.75)
+
+    def sun(self, hour):
+        return sun_direction(self.lat, hour, self.day_of_year)
+
+    def clock(self):
+        return f"{int(self.hour):02d}:{int(round(self.hour % 1 * 60)) % 60:02d}"
+
+
+def _hash(a, b):
+    return np.modf(np.sin(a * 127.1 + b * 311.7) * 43758.5453)[0] % 1.0
+
+
+def sky_colour(origin, direction, look=None):
     up = np.clip(direction[:, 1], 0, 1)[:, None] ** 0.5
-    colour = HORIZON * (1 - up) + ZENITH * up
+    zenith, horizon = (ZENITH, HORIZON) if look is None else (look.zenith, look.horizon)
+    colour = horizon * (1 - up) + zenith * up
+    if look is not None:
+        to_sun = np.clip(direction @ look.sun_disc, 0, 1)[:, None]
+        colour = colour + look.sun_colour * (to_sun ** 6 * 0.28 + to_sun ** 60 * 0.35) * (1 - look.night)
+        if look.night > 0:                        # stars, and the moon
+            a = np.floor(np.arctan2(direction[:, 2], direction[:, 0]) * 160)
+            b = np.floor(np.arcsin(np.clip(direction[:, 1], -1, 1)) * 160)
+            star = (_hash(a, b) > 0.9965) * _smooth(0.02, 0.25, direction[:, 1])
+            colour = colour + (star * look.night * 0.9)[:, None]
+            moon = _smooth(0.99955, 0.9997, direction @ look.moon_dir) * look.night
+            colour = colour + moon[:, None] * np.array([0.85, 0.9, 1.0])
     rising = direction[:, 1] > 0.015
     t = np.where(rising, (CLOUD_LAYER - origin[:, 1]) / np.where(rising, direction[:, 1], 1), 0)
     cx = np.floor((origin[:, 0] + direction[:, 0] * t) / 12).astype(np.int64) % _CLOUDS.shape[0]
     cz = np.floor((origin[:, 2] + direction[:, 2] * t) / 12).astype(np.int64) % _CLOUDS.shape[1]
-    cover = (rising & _CLOUDS[cx, cz]) * np.clip(1.25 - t / 2600.0, 0, 1) * 0.92
-    return colour * (1 - cover[:, None]) + cover[:, None]
+    cover = ((rising & _CLOUDS[cx, cz]) * np.clip(1.25 - t / 2600.0, 0, 1) * 0.92)[:, None]
+    cloud = 1.0 if look is None else np.minimum(
+        _mix([0.06, 0.07, 0.1], look.sun_colour * 0.55 + look.horizon * 0.55 + 0.12, 1 - look.night * 0.92), 1.0)
+    colour = colour * (1 - cover) + cloud * cover
+    if look is not None:                          # the sun itself
+        sun = _smooth(0.99955, 0.99975, direction @ look.sun_disc) * 4.0 * (1 - look.night)
+        colour = colour + sun[:, None] * look.sun_colour
+    return colour
 
 
-def shade(vol, tex, mean, solid, light, origin, direction, top, fog, depth=0):
-    """Colour of each ray. origin: (n, 3) or (3,). Rays through water or glass also show what is behind."""
+def block_light(vol):
+    """Light level (0-15) from lanterns in every cell: 15 at a lantern, one less per block, stopped by solid blocks."""
+    key = ("block", id(vol), vol.shape)
+    if key in _LIGHT_CACHE:
+        return _LIGHT_CACHE[key]
+    glow = GLOWING[vol]
+    light = np.zeros(vol.shape, dtype=np.uint8)
+    if glow.any():
+        ys, zs, xs = np.nonzero(glow)                 # only the part of the world near lanterns
+        lo = np.maximum([ys.min() - 15, zs.min() - 15, xs.min() - 15], 0)
+        hi = np.minimum([ys.max() + 16, zs.max() + 16, xs.max() + 16], vol.shape)
+        part = tuple(slice(a, b) for a, b in zip(lo, hi))
+        sub, opaque = vol[part], OPAQUE[vol[part]]
+        cost = LIGHT_COST[sub].astype(np.int16)
+        level = np.where(glow[part], 15, 0).astype(np.int16)
+        for _ in range(15):
+            spread = np.zeros_like(level)
+            spread[:-1] = np.maximum(spread[:-1], level[1:])
+            spread[1:] = np.maximum(spread[1:], level[:-1])
+            spread[:, :-1] = np.maximum(spread[:, :-1], level[:, 1:])
+            spread[:, 1:] = np.maximum(spread[:, 1:], level[:, :-1])
+            spread[:, :, :-1] = np.maximum(spread[:, :, :-1], level[:, :, 1:])
+            spread[:, :, 1:] = np.maximum(spread[:, :, 1:], level[:, :, :-1])
+            new = np.where(opaque, 0, np.maximum(level, spread - 1 - cost))
+            if np.array_equal(new, level):
+                break
+            level = new
+        light[part] = np.clip(level, 0, 15)
+    _LIGHT_CACHE[key] = light
+    return light
+
+
+def shade(vol, tex, mean, solid, light, origin, direction, top, fog, depth=0, look=None, blight=None):
+    """Colour of each ray. origin: (n, 3) or (3,). Rays through water or glass also show what is behind.
+    look: None for the game's plain noon light, or a Look for sunlight, shadows and lanterns."""
     n = len(direction)
     origin = np.broadcast_to(np.asarray(origin, dtype=float), (n, 3))
     size_x, size_z = vol.shape[2], vol.shape[1]
-    colour = sky_colour(origin, direction).astype(np.float32)
+    colour = sky_colour(origin, direction, look).astype(np.float32)
     below = direction[:, 1] < 0                                       # the void below the horizon: fog colour
-    colour[below] = HORIZON
+    colour[below] = HORIZON if look is None else look.horizon
 
     t_in, t_out, axis_in = box_span(origin, direction, np.zeros(3), np.array([size_x, top, size_z], dtype=float))
     t_in = np.maximum(t_in, 0) + 1e-6
@@ -857,29 +971,90 @@ def shade(vol, tex, mean, solid, light, origin, direction, top, fog, depth=0):
                 lvl = np.where(side_a & side_b, 0, 3 - (side_a.astype(int) + side_b + shifted(sa, sb)))
                 total += AO_LEVELS[lvl] * (fa if sa > 0 else 1 - fa) * (fb if sb > 0 else 1 - fb)
         ao[grid] = total
-    result = base * (bright * shade_face * ao)[:, None]
+    keep = SEE_THROUGH_SURFACE[blk][:, None]
+    if look is None:
+        result = base * (bright * shade_face * ao)[:, None]
+    else:
+        result, keep = _sunlit(vol, solid, top, look, blight, base, blk, normal, point, d, level, front, outside, ao,
+                               cube, keep)
 
     # water and glass: blend the surface over what is behind it
     clear = np.flatnonzero(LOOK_THROUGH[blk])
     if len(clear) and depth == 0:
         behind = shade(vol, tex, mean, solid, light, point[clear] + d[clear] * 1e-3, d[clear], top,
-                       (fog[0] - t[clear].min(), fog[1] - t[clear].min()), depth=1)
-        keep = SEE_THROUGH_SURFACE[blk[clear]][:, None]
-        result[clear] = result[clear] * keep + behind * (1 - keep)
+                       (fog[0] - t[clear].min(), fog[1] - t[clear].min()), depth=1, look=look, blight=blight)
+        result[clear] = result[clear] * keep[clear] + behind * (1 - keep[clear])
 
     haze = np.clip((t - fog[0]) / (fog[1] - fog[0]), 0, 1)[:, None]  # the game's fog is linear
-    colour[hits] = result * (1 - haze) + HORIZON * haze
+    if look is None:
+        colour[hits] = result * (1 - haze) + HORIZON * haze
+    else:                                           # far things also fade into the air, glowing towards the sun
+        towards = np.clip(d @ look.sun_disc, 0, 1)[:, None] ** 6 * 0.45 * (1 - look.night)
+        fog_colour = look.horizon * (1 - towards) + (look.sun_colour * 0.9 + look.horizon * 0.4) * towards
+        air = np.maximum(haze, (1 - np.exp(-t * 0.256 / fog[1]))[:, None] * 0.55)    # thinner when you see far
+        colour[hits] = result * (1 - air) + fog_colour * air
     return colour
 
 
+def _sunlit(vol, solid, top, look, blight, base, blk, normal, point, d, level, front, outside, ao, cube, keep):
+    """Sunlight with shadows (a ray from each point towards the sun), shade from the sky, lantern light, water that
+    mirrors the sky; then a film-like curve. Returns the colours and how much of water/glass shows."""
+    sky = level.astype(np.float32) / 15
+    lamp_level = blight[front[:, 1], front[:, 2], front[:, 0]].astype(np.float32) / 15
+    lamp_level[outside & cube] = 0
+    ndl = np.clip(normal @ look.sun_dir, 0, None)
+    ndl[CROSS[blk]] = 0.55                          # light shines on plants from every side
+    leafy = SEE_THROUGH[blk]
+    ndl[leafy] = np.maximum(ndl[leafy], 0.35)       # and through leaves
+    open_sky = _smooth(0.55, 0.95, sky)             # only where the sky reaches: no sunshine in cellars
+    sun = ndl * open_sky
+    lit_by_sun = np.ones(len(blk), dtype=np.float32)
+    need = np.flatnonzero(sun > 0.003)
+    if len(need) and look.sun_dir[1] > 0:
+        start = point[need] + np.where(CROSS[blk[need]][:, None], look.sun_dir * 0.05, normal[need] * 0.02)
+        towards = np.broadcast_to(look.sun_dir, (len(need), 3)).copy()
+        size = np.array([vol.shape[2], top, vol.shape[1]], dtype=float)
+        _, t_out, _ = box_span(start, towards, np.zeros(3), size)
+        hit_block = march(vol, start, towards, np.full(len(need), 1e-4), np.minimum(t_out, 400.0), None, solid,
+                          CROSS | LOOK_THROUGH)[0]
+        lit_by_sun[need] = hit_block == 0
+    sun = sun * lit_by_sun
+    shade_sky = look.ambient * ((0.25 + 0.75 * sky ** 2) * (0.78 + 0.22 * normal[:, 1]) * ao)[:, None]
+    lamp = np.array([1.0, 0.68, 0.38], dtype=np.float32) * (lamp_level ** 3 * 1.7 * (1 - 0.75 * look.day))[:, None]
+    lit = base * (shade_sky + look.sun_colour * sun[:, None] + lamp + 0.015)
+    glowing = GLOWING[blk]
+    lit[glowing] = base[glowing] * 1.9                # lanterns glow
+    keep = keep.copy()
+    water = np.flatnonzero((blk == p.WATER) & (normal[:, 1] > 0.5))
+    if len(water):                                  # little waves, the sky mirrored in them, the sun glinting
+        q = point[water]
+        wn = np.stack([np.sin(q[:, 0] * 1.3) * 0.05 + np.sin(q[:, 0] * 0.47 - q[:, 2] * 0.9) * 0.06,
+                       np.ones(len(water)),
+                       np.cos(q[:, 2] * 1.1) * 0.05 + np.sin(q[:, 2] * 0.53 + q[:, 0] * 0.7) * 0.06], axis=1)
+        wn /= np.linalg.norm(wn, axis=1, keepdims=True)
+        dv = d[water]
+        r = dv - 2 * (dv * wn).sum(axis=1, keepdims=True) * wn
+        fres = 0.04 + 0.96 * (1 - np.clip(-(dv * wn).sum(axis=1), 0, 1)) ** 5
+        mirrored = sky_colour(q, r, look) * (0.35 + 0.65 * open_sky[water])[:, None]
+        k = np.clip(fres * 1.6, 0, 0.85)[:, None]
+        lit[water] = lit[water] * (1 - k) + mirrored * k + look.sun_colour * (
+            np.clip(r @ look.sun_dir, 0, 1) ** 220 * 2.5 * open_sky[water] * lit_by_sun[water])[:, None]
+        keep[water] = (0.62 + 0.3 * fres)[:, None]
+    lit = 1 - np.exp(-lit * 1.25)                   # soft highlights, like film
+    grey = (lit @ np.array([0.299, 0.587, 0.114], dtype=np.float32))[:, None]
+    return grey + (lit - grey) * 1.22, keep         # a little more colour
+
+
 def render(vol, eye, target, width=1280, height=720, fov=70.0, ssaa=2, render_distance=16, textures=None,
-           crosshair=False):
+           crosshair=False, look=None):
     """Draw the world as the game would at noon, from camera position `eye` looking at `target`.
     Coordinates are (x, layer, z) in blocks. fov is the game's field of view setting (vertical, default 70).
     render_distance is in chunks, like the game's setting: fog closes in near its end.
-    textures: None (built-in) or a TextureSource."""
+    textures: None (built-in) or a TextureSource. look: a Look for the real sun with shadows at a time of day
+    (like shaders), or None for the game's plain noon light."""
     tex, mean, solid = make_textures(textures)
     light = sky_light(vol)
+    blight = block_light(vol) if look is not None else None
     eye, target = np.array(eye, dtype=float), np.array(target, dtype=float)
     forward = target - eye
     forward /= np.linalg.norm(forward)
@@ -899,8 +1074,12 @@ def render(vol, eye, target, width=1280, height=720, fov=70.0, ssaa=2, render_di
         yy, xx = np.meshgrid(ys[r0:r0 + band], xs, indexing="ij")
         direction = forward + xx[..., None] * right + yy[..., None] * up
         direction = (direction / np.linalg.norm(direction, axis=-1, keepdims=True)).reshape(-1, 3)
-        out[r0:r0 + band] = shade(vol, tex, mean, solid, light, eye, direction, top, fog).reshape(-1, w, 3)
+        out[r0:r0 + band] = shade(vol, tex, mean, solid, light, eye, direction, top, fog, look=look,
+                                  blight=blight).reshape(-1, w, 3)
     out = out.reshape(height, ssaa, width, ssaa, 3).mean(axis=(1, 3))
+    if look is not None:                              # a soft dark edge round the picture
+        vy, vx = np.meshgrid(np.linspace(-0.5, 0.5, height), np.linspace(-0.5, 0.5, width), indexing="ij")
+        out *= (1 - 0.32 * (vx ** 2 + vy ** 2))[..., None]
     img = (np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8)
     if crosshair:                                     # a plain + in the middle, like the game's aiming mark
         cy, cx, r = height // 2, width // 2, max(6, height // 70)
@@ -976,12 +1155,20 @@ def roof_camera(vol):
     return eye, (cx - 15, ground_here + 2, cz - 10)
 
 
-def standard_views(vol, out_dir, width=1280, height=720, textures="auto"):
-    """Three pictures of any place, drawn the way the game shows it at noon: standing in a street as a player
-    (render distance 16), above the rooftops (16), and an overview from high up (32)."""
+def standard_views(vol, out_dir, width=1280, height=720, textures="auto", latlon=None, time="afternoon", plain=False,
+                   extra=True):
+    """Pictures of any place: standing in a street as a player (render distance 16), above the rooftops (16), and an
+    overview from high up (32). With the sun (plain=False): lit by the real sun at that place on today's date at
+    `time`, with shadows, like shaders; and with extra=True also the rooftops at sunset and the street at night.
+    plain=True draws them the way the game shows it at noon instead."""
     source = resolve_textures(textures)
     print("Textures: " + ("Pixel Perfection CE (comes with place2mc; no Minecraft Java installation found)"
                           if source and source.path == BUNDLED_TEXTURES else f"from {source.path}" if source else "built-in"))
+    lat = latlon[0] if latlon else 45.0
+    look = None if plain else Look(lat, time)
+    if look is not None:
+        print(f"Light: the real {'moon' if look.night > 0.5 else 'sun'} over this place today at {look.clock()} "
+              f"sun time ({time}), with shadows")
     sx, sz = vol.shape[2], vol.shape[1]
     column = vol[:, sz // 2, sx // 2]
     centre = (sx / 2, (int(np.flatnonzero(column != p.AIR)[-1]) if column.any() else p.FLOOR) + 4, sz / 2)
@@ -989,14 +1176,19 @@ def standard_views(vol, out_dir, width=1280, height=720, textures="auto"):
     views = []
     street = street_camera(vol)
     if street:
-        views.append(("place2mc_view_player.png", street[0], street[1], 16, True))
+        views.append(("place2mc_view_player.png", street[0], street[1], 16, True, look))
     eye, target = roof_camera(vol)
-    views.append(("place2mc_view_rooftops.png", eye, target, 16, False))
-    views.append(("place2mc_view_overview.png", (sx * 0.92, max(150, top + 60), sz * 1.02), centre, 32, False))
+    views.append(("place2mc_view_rooftops.png", eye, target, 16, False, look))
+    views.append(("place2mc_view_overview.png", (sx * 0.92, max(150, top + 60), sz * 1.02), centre, 32, False, look))
+    if look is not None and extra:                  # the same place at sunset and at night, unless already asked for
+        if time != "sunset":
+            views.append(("place2mc_view_sunset.png", eye, target, 16, False, Look(lat, "sunset")))
+        if street and time != "night":
+            views.append(("place2mc_view_night.png", street[0], street[1], 16, False, Look(lat, "night")))
     paths = []
-    for name, eye, target, distance, aim in views:
+    for name, eye, target, distance, aim, light in views:
         path = Path(out_dir) / name
         render(vol, eye, target, width, height, 70, render_distance=distance, textures=source,
-               crosshair=aim).save(path)
+               crosshair=aim, look=light).save(path)
         paths.append(path)
     return paths

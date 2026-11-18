@@ -23,7 +23,10 @@ Other options:
     --flat                    flat ground instead of the real hills (hills need internet the first time)
     --osm-file map.osm        work offline from a file exported from openstreetmap.org
     --preview-only            only make the preview picture, do not write the world
-    --screenshots             also draw game-style 3D pictures of the result (needs mcrender.py)
+    --screenshots             also draw game-style 3D pictures of the result (needs mcrender.py): in the
+                              afternoon sun with shadows, plus sunset and night
+    --picture-time TIME       morning, midday, afternoon, sunset or night (default afternoon)
+    --plain-pictures          draw the pictures in the game's plain noon light instead (faster)
     --textures PATH           textures for the pictures: a game .jar or a resource pack (default: your own
                               Minecraft Java install if it is found, otherwise built-in textures)
 
@@ -52,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.0"
+VERSION = "1.1"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -2091,6 +2094,10 @@ def main():
     ap.add_argument("--save-osm", help="save the downloaded map data to this .json file")
     ap.add_argument("--preview-only", action="store_true", help="only make the preview picture")
     ap.add_argument("--screenshots", action="store_true", help="also draw game-style 3D pictures (needs mcrender.py next to this file)")
+    ap.add_argument("--picture-time", default="afternoon", choices=("morning", "midday", "afternoon", "sunset", "night"),
+                    help="time of day for the --screenshots pictures: the real sun at this place today (default afternoon)")
+    ap.add_argument("--plain-pictures", action="store_true",
+                    help="draw the --screenshots pictures in the game's plain noon light, without sun and shadows (faster)")
     ap.add_argument("--no-walk", action="store_true", help="do not make the walk-through page")
     ap.add_argument("--no-overture", action="store_true",
                     help="do not add buildings and land cover from Overture Maps where OpenStreetMap has none")
@@ -2199,7 +2206,8 @@ def main():
             import mcrender
         except ImportError:
             sys.exit("--screenshots needs mcrender.py in the same folder as place2mc.py.")
-        for path in mcrender.standard_views(vol, out_dir, textures=args.textures):
+        for path in mcrender.standard_views(vol, out_dir, textures=args.textures, latlon=(lat, lon),
+                                            time=args.picture_time, plain=args.plain_pictures):
             print(f"Picture: {path}")
     if args.preview_only:
         return

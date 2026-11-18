@@ -36,8 +36,11 @@ If the fable-playbook skill is available, follow it on every task.
   land cover (z13 `land_cover` layer of base.pmtiles) as `place2mc:land_cover` areas. build_map skips an
   Overture building where an OSM building already covers 30% of it. Checked by `tests/check_overture.py`
   against mapbox-vector-tile and pmtiles (pip), and on ALA's real tiles by running it in Ali's browser with Pyodide.
-- `mcrender.py`: draws pictures the way the game does at noon (sky light levels, face shading, smooth
-  lighting, fog by render distance, clouds, block shapes for stairs/slabs/doors/fences/walls/rails/lanterns).
+- `mcrender.py`: draws pictures by casting rays through the blocks (block shapes for stairs/slabs/doors/fences/
+  walls/rails/lanterns, smooth lighting, fog by render distance, clouds). With a `Look` (the default in
+  `standard_views`): the real sun for the place and date, shadow rays towards it (leaves cast dappled shadows),
+  lantern light (`block_light`), water mirroring the sky with a sun glint, sun disc, stars and moon, the same
+  film curve and colours as the walk-through. `look=None` / `--plain-pictures`: the game's plain noon light.
   Uses the real textures from the user's own Minecraft Java install or a resource pack when found, built-in
   textures otherwise. Nothing from the game is copied anywhere.
 - `tests/`: see "Check after every change".
@@ -61,6 +64,7 @@ python tests/get_mcdata.py mcdata                                   # once
 python tests/make_bedrock_table.py mcdata                           # after adding or changing a block
 python tests/check_blocks.py mcdata 1.18 1.21.4                     # names, states, shapes vs the game
 python tests/check_details.py out.png                               # fences, walls, rails, zebras, benches
+python tests/check_sun.py                                           # sun position, shadows in the pictures
 python tests/fake_tiles.py TILES LAT,LON 608                        # test hills without internet
 python place2mc.py --osm-file MAP --center LAT,LON --radius 300 --saves OUT --tile-cache TILES --edition both
 python tests/verify_world.py MAP LAT,LON 300 "OUT/<name>" TILES     # Java, read back with 2 libraries
@@ -82,6 +86,15 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - New worlds are void around the build, so water on the edge is walled in with invisible barrier blocks.
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
+
+## State (v1.1)
+
+v1.1: Ali: "do it" (sun and shadows in the pictures too) + "make it look so cool". mcrender.Look ports the
+walk-through's lighting(); `--screenshots` now makes player/rooftops/overview at `--picture-time` (default
+afternoon) plus rooftops at sunset and the street at night; `--plain-pictures` for the old look. The haze in the
+pictures scales with render distance (0.256 / fog end). README pictures redone in the new look (ALA, Monaco at
+sunset, the details test map at a low London sun). ALA: 5 pictures in about a minute; the app test (Monaco,
+hills, both editions, pictures) takes about 5 minutes in this workspace.
 
 ## State (v1.0)
 
@@ -155,6 +168,5 @@ memory; rails and fences are flat-ground objects (no bridges or tunnels at heigh
   keep its Apache-2.0 notice.
 - Terra++ (Build The Earth mod): elevation, biomes, tree cover and ocean depth from public data; /tpll.
 
-Next ideas, roughly in order: whatever breaks in Ali's first real test; sun and shadows in mcrender pictures;
-street-name signs; bridges and tunnels at the right height; light blocks for night;
-building region by region for bigger areas.
+Next ideas, roughly in order: whatever breaks in Ali's first real test; street-name signs; bridges and tunnels at
+the right height; light blocks for night; building region by region for bigger areas.

@@ -5,16 +5,23 @@ streets, buildings, water, parks and trees from OpenStreetMap and the hills from
 them at 1 block = 1 metre. You get a walk-through that opens in any browser (no Minecraft needed), a ready-to-play
 Java world, and a Bedrock `.mcworld` file.
 
-![Standing in a street of the converted town](docs/street.jpg)
+![A street at African Leadership Academy, Johannesburg, in the afternoon sun](docs/street.jpg)
+
+The same street at four times of day. The sun stands where it really does over that place on that date:
+
+![Morning, afternoon, sunset and night](docs/times-of-day.jpg)
 
 | | |
 |---|---|
-| ![Rooftops](docs/rooftops.jpg) | ![Zebra crossing](docs/zebra-crossing.jpg) |
-| ![Fences, garden walls, hedge and railway](docs/fences-walls-rails.jpg) | ![Fenced garden](docs/garden-fence.jpg) |
+| ![Sunset over the sea at Monaco](docs/sunset-sea.jpg) | ![Night: street lamps and lit windows](docs/night.jpg) |
+| ![Rooftops of ALA in the afternoon](docs/rooftops.jpg) | ![The same rooftops at sunset](docs/sunset-rooftops.jpg) |
+| ![A car park with parked cars](docs/car-park.jpg) | ![Fences, brick and garden walls, rails, a house](docs/fences-walls-rails.jpg) |
 
-These pictures are made by place2mc itself (`mcrender.py`), drawn the way the game draws a world at noon. On a
-computer with Minecraft Java installed, the pictures and the walk-through use the textures of your own game;
-otherwise they use the Minecraft-style Pixel Perfection CE textures that come with place2mc.
+These pictures are made by place2mc itself (`mcrender.py`, plain Python): sunlight with shadows, the sky, lanterns
+at night and water that mirrors the sky, like a Minecraft shader pack. `--plain-pictures` draws them the way the
+game itself draws a world at noon instead. On a computer with Minecraft Java installed, the pictures and the
+walk-through use the textures of your own game; otherwise they use the Minecraft-style Pixel Perfection CE textures
+that come with place2mc.
 
 ## Use it
 
@@ -60,6 +67,10 @@ shelters and covered walkways on pillars, zebra crossings, rails, fences, garden
 (`barrier=wall` with `material=brick`), hedges, benches, street lamps (on the verge where a street has no sidewalk),
 trees, bushes and flowers. Heights come from the map (`height`, `building:levels`, Overture); when it says nothing,
 buildings get one to three floors depending on what they are and how big.
+
+Pictures: `--screenshots` draws the result in the afternoon sun with shadows, plus the rooftops at sunset and a
+street at night. `--picture-time morning|midday|afternoon|sunset|night` picks the time, `--plain-pictures` the
+game's plain noon light (faster).
 
 Other options: `--osm-file map.osm` (work offline from a saved map), `--flat` (no hills), `--preview-only`,
 `--textures PATH` (a game .jar or resource pack for the pictures). `python place2mc.py --help` lists them all.
