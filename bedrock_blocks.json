@@ -305,6 +305,422 @@
 },
 "version": 18168865
 },
+"minecraft:brick_wall[east=low,north=low,south=low,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=low,south=low,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=low,south=none,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=low,south=none,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=none,south=low,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=none,south=low,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=none,south=none,up=false,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=low,north=none,south=none,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"short"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=low,south=low,up=false,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=low,south=low,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=low,south=none,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=low,south=none,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"short"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=none,south=low,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=none,south=low,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"short"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=none,south=none,up=true,west=low]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"short"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:brick_wall[east=none,north=none,south=none,up=true,west=none]": {
+"name": "minecraft:brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
+1
+]
+},
+"version": 18168865
+},
 "minecraft:bricks[]": {
 "name": "minecraft:brick_block",
 "states": {},

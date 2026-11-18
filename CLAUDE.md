@@ -83,6 +83,20 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.0)
+
+v1.0: Ali: "make it realistic and specific, make it look sick". Walk-through shaders (G: sun + shadows / sun / plain):
+real sun position from info.lat and today's date (solar formulas in walk.html), T cycles morning/midday/afternoon/
+sunset/night; 2048 shadow map from the sun (redrawn at most 4x a second, only chunks it sees); block light from
+lanterns (BFS like sky light, warm, strong only after dark); water with waves, sky reflection and sun glint; waving
+leaves/grass; filmic curve, saturation, haze, vignette; sun disc, stars, moon, tinted clouds. Vertices are 12 floats
+(sky, block light, AO, face*8+kind). Converter: inner walls (white concrete every 9 blocks, doorways, per floor);
+brick boundary walls (barrier=wall + material=brick -> bricks + brick_wall, BRICK_WALLS table); tall verge lamps
+on streets with no sidewalk. ALA: Street View (Printech Ave, Oct 2026) shows a ~2.6 m red face-brick boundary
+wall, brick gatehouse with green hip roof, dashed centre line, dirt verges: the campus way now has
+barrier=wall/material=brick in ala-tags.json. ALA map data refreshed 2026-11-18 (2 traffic signals, just
+outside the 400 m radius).
+
 ## State (v0.9)
 
 v0.9: Ali: "make me move faster", "consider the heights", "even the smallest details". Walk-through speed keys 1-4
@@ -131,7 +145,7 @@ a gravel desert; campus outlines (amenity=college/school) were not downloaded; c
 5-7 storeys. Overpass was over capacity that day, so downloads now fall back to api.openstreetmap.org.
 
 Known limits: sea 2 blocks deep; a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
-memory; rails and fences are flat-ground objects (no bridges or tunnels at height); no interiors, no signs.
+memory; rails and fences are flat-ground objects (no bridges or tunnels at height); no signs.
 
 ## Similar tools (for ideas)
 
@@ -141,6 +155,6 @@ memory; rails and fences are flat-ground objects (no bridges or tunnels at heigh
   keep its Apache-2.0 notice.
 - Terra++ (Build The Earth mod): elevation, biomes, tree cover and ocean depth from public data; /tpll.
 
-Next ideas, roughly in order: whatever breaks in Ali's first real test; inner walls between rooms;
+Next ideas, roughly in order: whatever breaks in Ali's first real test; sun and shadows in mcrender pictures;
 street-name signs; bridges and tunnels at the right height; light blocks for night;
 building region by region for bigger areas.

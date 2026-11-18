@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "0.9"
+VERSION = "1.0"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -109,6 +109,7 @@ FLOWERS = [block(n) for n in ("dandelion", "poppy", "oxeye_daisy", "cornflower",
 BIOMES = ["minecraft:plains", "minecraft:forest", "minecraft:river", "minecraft:ocean", "minecraft:beach"]
 PLAINS, FOREST, RIVER, OCEAN, BEACH = range(len(BIOMES))
 STONE_BRICKS = block("stone_bricks")
+BRICK = block("bricks")
 POLISHED_ANDESITE = block("polished_andesite")
 ANDESITE = block("andesite")
 COBBLE = block("cobblestone")
@@ -154,12 +155,15 @@ FENCES = [block("oak_fence", **{side: str(bool(bits >> i & 1)).lower() for i, si
 GARDEN_WALLS = [block("stone_brick_wall", up="false" if bits in (0b0011, 0b1100) else "true",
                       **{side: "low" if bits >> i & 1 else "none" for i, side in enumerate(FACINGS)})
                 for bits in range(16)]
+BRICK_WALLS = [block("brick_wall", up="false" if bits in (0b0011, 0b1100) else "true",
+                     **{side: "low" if bits >> i & 1 else "none" for i, side in enumerate(FACINGS)})
+               for bits in range(16)]
 HEDGE = TREES[0][1]
 RAIL_SHAPES = ("north_south", "east_west", "ascending_north", "ascending_south", "ascending_west", "ascending_east",
                "south_east", "south_west", "north_west", "north_east")
 RAILS = {shape: block("rail", shape=shape) for shape in RAIL_SHAPES}
 # barrier kinds painted on the map; heights come from the map's height tag
-B_NONE, B_FENCE, B_WALL, B_HEDGE = range(4)
+B_NONE, B_FENCE, B_WALL, B_HEDGE, B_BRICK = range(5)
 BARRIERS = {"fence": B_FENCE, "guard_rail": B_FENCE, "railing": B_FENCE, "handrail": B_FENCE,
             "wall": B_WALL, "retaining_wall": B_WALL, "city_wall": B_WALL, "hedge": B_HEDGE}
 # railway tracks that get rails (others, like abandoned lines, are left out)
@@ -203,7 +207,7 @@ BLOCK_RGB = {
     "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "bookshelf": (117, 94, 59),
     "spruce_slab": (114, 84, 48), "black_concrete": (8, 10, 15), "red_concrete": (142, 33, 33),
     "lime_concrete": (94, 169, 24), "yellow_concrete": (241, 175, 21), "blue_concrete": (45, 47, 143), "dark_prismarine_stairs": (52, 92, 76),
-    "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
+    "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "brick_wall": (150, 97, 83), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
 }
 
 # surface classes painted on the 2D map (one byte per block column). S_GRASS is also "nothing mapped here".
@@ -725,7 +729,11 @@ def build_map(elements, lat0, lon0, size):
             continue
 
         if tags.get("barrier") in BARRIERS and kind == "way" and len(line) >= 2:
-            barriers.append((BARRIERS[tags["barrier"]], barrier_height(tags), line))     # an area may have one too
+            kind_ = BARRIERS[tags["barrier"]]
+            material = " ".join(tags.get(k, "") for k in ("material", "wall", "barrier:material", "wall:material"))
+            if kind_ == B_WALL and "brick" in material:
+                kind_ = B_BRICK                 # a face-brick wall, like the ones round many South African sites
+            barriers.append((kind_, barrier_height(tags), line))     # an area may have one too
         if tags.get("building") not in (None, "no") and tags.get("location") != "underground":
             if outers:
                 buildings.append((el.get("id", 0), tags, outers, inners, kind == "relation"))
@@ -1394,12 +1402,25 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         z, x = divmod(int(cell), size)
         near_door[max(0, z - 2):z + 3, max(0, x - 2):x + 3] = True
     inside = inner & windows & ~is_open & ~near_door
-    wall_dirs = [nb > 0 for nb in neighbours((walls & has_building).astype(np.int32))]      # wall to the N, S, W, E
-    by_wall = inside & np.logical_or.reduce(wall_dirs)
+    # inner walls: rooms about 8 blocks across, a doorway in the middle of each wall, on every floor
+    partition = inside & ((xx % 9 == 0) | (zz % 9 == 0))
+    doorway = partition & (((xx % 9 == 0) & (zz % 9 == 4)) | ((zz % 9 == 0) & (xx % 9 == 4)))
+    inner_walls = 0
+    for k in range(1, int(height.max())):
+        level = k % np.maximum(storey, 1)
+        m = partition & (k < height) & (level != 0) & ~(doorway & ((level == 1) | (level == 2)))
+        y = floor0 + k
+        m &= vol[np.minimum(y, layers - 1), zz, xx] == AIR
+        vol[y[m], zz[m], xx[m]] = WHITE_CONCRETE
+        inner_walls += int(m.sum())
+    inside &= ~partition
+    wall_dirs = [nb > 0 for nb in neighbours(((walls | partition) & has_building).astype(np.int32))]  # wall N, S, W, E
+    by_wall = inside & np.logical_or.reduce(wall_dirs) & ~np.logical_or.reduce(
+        [nb > 0 for nb in neighbours(doorway.astype(np.int32))])       # keep the doorways clear
     middle = inside & ~(window_fraction(walls, 2) > 0)
     shelf = by_wall & ((xx * 3 + zz * 5) % 11 < 2)
     desk = by_wall & ~shelf & ((xx * 7 + zz * 3) % 9 == 4)
-    lamp = middle & (xx % 6 == 3) & (zz % 6 == 3)
+    lamp = middle & (xx % 9 == 4) & (zz % 9 == 4)
     seat = ROOF_STAIRS[block("spruce_planks")]
     furnished = 0
     for j in range(int((height // np.maximum(storey, 1)).max()) + 1):
@@ -1511,7 +1532,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         ok = (kind_map > 0) & ~has_building & ~water & ~np.isin(ground, (S_ROAD, S_LINE, S_PARKING, S_FOOT, S_PATH,
                                                                           S_SIDEWALK))
         kind_map = np.where(ok, kind_map, 0)
-        for kind_ in (B_FENCE, B_WALL, B_HEDGE):
+        for kind_ in (B_FENCE, B_WALL, B_BRICK, B_HEDGE):
             here = kind_map == kind_
             if not here.any():
                 continue
@@ -1532,8 +1553,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
                     vol[yk, zk, xk] = np.array(FENCES, dtype=np.uint8)[bits[zk, xk]]
                 else:
                     top_row = h[m] == k + 1                # the top of a wall is a wall block; below it, stone bricks
-                    caps = np.array(GARDEN_WALLS, dtype=np.uint8)[bits[zk, xk]]
-                    vol[yk, zk, xk] = np.where(top_row, caps, STONE_BRICKS)
+                    caps = np.array(BRICK_WALLS if kind_ == B_BRICK else GARDEN_WALLS, dtype=np.uint8)[bits[zk, xk]]
+                    vol[yk, zk, xk] = np.where(top_row, caps, BRICK if kind_ == B_BRICK else STONE_BRICKS)
                 barrier_cells += int(m.sum()) if k == 0 else 0
 
     # street lamps along the sidewalks of the bigger roads, roughly every 20 blocks
@@ -1550,6 +1571,21 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         vol[y:y + 4, z, x] = LAMP_POST
         vol[y + 4, z, x] = LANTERN
         blocked[max(0, z - 16):z + 17, max(0, x - 16):x + 17] = True
+        taken[z, x] = True
+        lamps += 1
+
+    # streets with no sidewalk (common outside town centres): tall lamps on the verge, roughly every 30 blocks
+    verge = np.isin(ground, (S_GRASS, S_PARK, S_LAWN, S_INDUSTRIAL, S_FARM)) & ~has_building & ~water
+    verge_ok = verge & (window_fraction(road, 1) > 0) & ~(window_fraction(ground == S_SIDEWALK, 3) > 0) & \
+        ~(window_fraction(has_building, 2) > 0)
+    for cell in rng.permutation(np.flatnonzero(verge_ok)):
+        z, x = divmod(int(cell), size)
+        y = int(g[z, x]) + 1
+        if blocked[z, x] or (vol[y:y + 6, z, x] != AIR).any():
+            continue
+        vol[y:y + 5, z, x] = LAMP_POST
+        vol[y + 5, z, x] = LANTERN
+        blocked[max(0, z - 14):z + 15, max(0, x - 14):x + 15] = True
         taken[z, x] = True
         lamps += 1
 
@@ -1731,7 +1767,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     build_volume.stats = {"trees": planted, "street lamps": lamps, "doors": doors_placed, "plants and flowers": plants,
                           "half slabs on slopes": slabs, "rails": rails_laid, "fence, wall and hedge blocks": barrier_cells,
                           "benches": benches, "bushes and flowers by buildings": landscaping,
-                          "pieces of furniture and lamps inside": furnished, "parked cars": cars, "traffic lights": signals}
+                          "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -2176,7 +2212,7 @@ def main():
         credit = "Map data © OpenStreetMap contributors" + (
             ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "")
         walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures,
-                               credit=credit)
+                               credit=credit, latlon=(lat, lon))
         print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
         print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):

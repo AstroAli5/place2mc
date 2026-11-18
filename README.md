@@ -24,7 +24,9 @@ otherwise they use the Minecraft-style Pixel Perfection CE textures that come wi
 4. Search for a place or click on the map, choose the size and the edition, and press **Convert**.
 5. When it says Done:
    - **Walk around**: press **Walk around** and walk with W A S D and the mouse, right in the browser. Keys 1 to 4
-     set the speed (normal, ×2, ×4, ×8), F flies. The file `Walk around <name>.html` in the world folder does the
+     set the speed (normal, ×2, ×4, ×8), F flies, T changes the time of day (morning, midday, afternoon, sunset,
+     night) and G switches the shaders (sunlight with shadows, sunlight only, or plain Minecraft). The sun stands
+     where it really does over that place on the day you open it, and at night the lanterns light the streets and rooms. The file `Walk around <name>.html` in the world folder does the
      same on any computer or phone: just open it.
    - **Java**: open Minecraft, go to Singleplayer, and the new world is in the list. You start on a street in the middle.
    - **Bedrock**: press **Add to Bedrock** (on Windows, Minecraft opens and imports the world), or send the
@@ -52,9 +54,10 @@ To make a place look more like itself, give it the colours and materials the map
 OpenStreetMap (`building:colour`, `building:material`, `roof:colour`, `roof:material`, `roof:shape`,
 `building:levels`) are used automatically.
 
-What gets built besides streets, buildings and hills: rooms with bookshelves, desks, chairs and hanging lanterns on
-every floor (you see them through the windows), doors, car parks with bay lines and parked cars, traffic lights,
-shelters and covered walkways on pillars, zebra crossings, rails, fences, walls, hedges, benches, street lamps,
+What gets built besides streets, buildings and hills: rooms divided by inner walls with doorways, with bookshelves,
+desks, chairs and hanging lanterns on every floor (you see them through the windows, lit up at night), doors, car parks with bay lines and parked cars, traffic lights,
+shelters and covered walkways on pillars, zebra crossings, rails, fences, garden walls, face-brick walls
+(`barrier=wall` with `material=brick`), hedges, benches, street lamps (on the verge where a street has no sidewalk),
 trees, bushes and flowers. Heights come from the map (`height`, `building:levels`, Overture); when it says nothing,
 buildings get one to three floors depending on what they are and how big.
 

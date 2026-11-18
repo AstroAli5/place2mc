@@ -56,6 +56,8 @@
     <tr><td>F or Space Space</td><td>fly on / off (Space up, Shift down)</td></tr>
     <tr><td>[ and ]</td><td>see less / farther</td></tr>
     <tr><td>1 2 3 4</td><td>speed: normal, ×2, ×4, ×8</td></tr>
+    <tr><td>T</td><td>time of day: morning, midday, afternoon, sunset, night</td></tr>
+    <tr><td>G</td><td>shaders: sun and shadows, sun only, plain Minecraft</td></tr>
     <tr><td>J</td><td>auto-jump on / off (on)</td></tr>
     <tr><td>R</td><td>back to the start</td></tr>
     <tr><td>Esc</td><td>pause</td></tr>
@@ -201,16 +203,42 @@ function buildChunk(world, cx, cz) {
     }
   }
 
+  // block light: lanterns give light 15, one level less per block, like the game
+  const glow = world.glow, BL = new Uint8Array(W * W * H), bq = Array.from({ length: 16 }, () => []);
+  for (let i = 0; i < blk.length; i++) if (glow[blk[i]]) { BL[i] = 15; bq[15].push(i); }
+  for (let level = 15; level > 1; level--) {
+    const list = bq[level];
+    for (let k = 0; k < list.length; k++) {
+      const i = list[k];
+      if (BL[i] !== level) continue;
+      const x = i % W, z = Math.floor(i / W) % W, y = Math.floor(i / plane);
+      const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, z > 0 ? i - W : -1, z < W - 1 ? i + W : -1,
+                  y > 0 ? i - plane : -1, y < H - 1 ? i + plane : -1];
+      for (const j of nb) {
+        if (j < 0) continue;
+        const b = blk[j];
+        if (opaque[b]) continue;
+        const nl = level - 1 - cost[b];
+        if (nl > BL[j]) { BL[j] = nl; bq[Math.max(nl, 0)].push(j); }
+      }
+    }
+  }
+
   const info = world.info, LM = info.lightmap, SH = info.faceShade, AO = info.aoLevels;
   const solidCube = world.solidCube, cube = world.cube, inv = world.invisible, leaves = world.leaves;
-  const alpha = world.alpha, glow = world.glow, crossB = world.cross, boxes = world.boxes, water = world.water;
+  const alpha = world.alpha, crossB = world.cross, boxes = world.boxes, water = world.water;
   const opq = [], tra = [];
   const blockAt = (x, y, z) => (y < 0 ? world.ground : y >= H ? 0 : blk[at(x, y, z)]);
   const lightAt = (x, y, z) => (y < 0 ? 0 : y >= H ? 15 : L[at(x, y, z)]);
-  function quad(out, pts, uvs, layer, bright, a, flip) {
+  const blAt = (x, y, z) => (y < 0 || y >= H ? 0 : BL[at(x, y, z)]);
+  // per corner: position, texture (u, v, layer), classic brightness, see-through, sky light, block light,
+  // ambient occlusion, face * 8 + kind (kind: 1 water, 2 leaves, 3 plant, 4 glowing)
+  function quad(out, pts, uvs, layer, bright, a, flip, ext, nk) {
     const order = flip ? [1, 2, 3, 0] : [0, 1, 2, 3];
-    for (const k of order) out.push(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, bright[k], a);
+    for (const k of order) out.push(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, bright[k], a,
+                                    ext[k][0], ext[k][1], ext[k][2], nk);
   }
+  const kindOf = b => (b === water ? 1 : glow[b] ? 4 : leaves[b] ? 2 : crossB[b] ? 3 : 0);
   for (let y = 0; y <= yMax; y++) for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
     const x = lx + 16, z = lz + 16, b = blk[at(x, y, z)];
     if (!b || inv[b]) continue;
@@ -226,7 +254,7 @@ function buildChunk(world, cx, cz) {
         if (a > 0 && nb === b) continue;
         if (b === water && f === 0 && height === 1) continue;
         const layer = 2 * b + (f < 2 ? 0 : 1);
-        const pts = [], uvs = [], bright = [], aos = [];
+        const pts = [], uvs = [], bright = [], aos = [], ext = [];
         const shade = SH[FACES[f].shade];
         for (const c of FACES[f].c) {
           const cy = c[1] === 1 ? height : 0;
@@ -239,17 +267,20 @@ function buildChunk(world, cx, cz) {
           p1[axes[0]] += s[0]; p2[axes[1]] += s[1]; p3[axes[0]] += s[0]; p3[axes[1]] += s[1];
           const o1 = solidCube[blockAt(...p1)], o2 = solidCube[blockAt(...p2)], o3 = solidCube[blockAt(...p3)];
           const ao = o1 && o2 ? 0 : 3 - (o1 + o2 + o3);
-          let sum = LM[lightAt(nx, ny, nz)], cnt = 1;
-          if (!o1) { sum += LM[lightAt(...p1)]; cnt++; }
-          if (!o2) { sum += LM[lightAt(...p2)]; cnt++; }
-          if (!o3 && !(o1 && o2)) { sum += LM[lightAt(...p3)]; cnt++; }
+          const l0 = lightAt(nx, ny, nz);
+          let sum = LM[l0], cnt = 1, sky = l0, bl = blAt(nx, ny, nz);
+          if (!o1) { const l = lightAt(...p1); sum += LM[l]; sky += l; bl += blAt(...p1); cnt++; }
+          if (!o2) { const l = lightAt(...p2); sum += LM[l]; sky += l; bl += blAt(...p2); cnt++; }
+          if (!o3 && !(o1 && o2)) { const l = lightAt(...p3); sum += LM[l]; sky += l; bl += blAt(...p3); cnt++; }
           aos.push(ao);
           bright.push(glow[b] ? 1 : (sum / cnt) * shade * AO[ao]);
+          ext.push([sky / cnt / 15, bl / cnt / 15, AO[ao]]);
         }
-        quad(out, pts, uvs, layer, bright, a, aos[0] + aos[2] < aos[1] + aos[3]);
+        quad(out, pts, uvs, layer, bright, a, aos[0] + aos[2] < aos[1] + aos[3], ext, f * 8 + kindOf(b));
       }
     } else if (boxes[b].length) {
       const own = glow[b] ? 1 : LM[lightAt(x, y, z)];
+      const e1 = [lightAt(x, y, z) / 15, blAt(x, y, z) / 15, 1], ext = [e1, e1, e1, e1];
       for (const bx of boxes[b]) {
         for (let f = 0; f < 6; f++) {
           const n = FACES[f].n;
@@ -263,16 +294,17 @@ function buildChunk(world, cx, cz) {
             uvs.push(faceUV(f, px, py, pz));
             bright.push(own * SH[FACES[f].shade]);
           }
-          quad(out, pts, uvs, 2 * b + (f < 2 ? 0 : 1), bright, a, false);
+          quad(out, pts, uvs, 2 * b + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8 + kindOf(b));
         }
       }
     } else if (crossB[b]) {
       const br = LM[lightAt(x, y, z)] * 0.9, layer = 2 * b + 1, e = 0.06;
+      const e1 = [lightAt(x, y, z) / 15, blAt(x, y, z) / 15, 0.9], ext = [e1, e1, e1, e1], nk = 6 * 8 + 3;
       for (const [x0, z0, x1, z1] of [[e, e, 1 - e, 1 - e], [e, 1 - e, 1 - e, e]]) {
         const pts = [[wx + x0, y, wz + z0], [wx + x1, y, wz + z1], [wx + x1, y + 1, wz + z1], [wx + x0, y + 1, wz + z0]];
         const uvs = [[0, 1], [1, 1], [1, 0], [0, 0]];
-        quad(out, pts, uvs, layer, [br, br, br, br], a, false);
-        quad(out, [pts[1], pts[0], pts[3], pts[2]], uvs, layer, [br, br, br, br], a, false);
+        quad(out, pts, uvs, layer, [br, br, br, br], a, false, ext, nk);
+        quad(out, [pts[1], pts[0], pts[3], pts[2]], uvs, layer, [br, br, br, br], a, false, ext, nk);
       }
     }
   }
@@ -281,26 +313,99 @@ function buildChunk(world, cx, cz) {
 
 // ------------------------------------------------------------------ WebGL
 const VS = `#version 300 es
-in vec3 aPos; in vec3 aUVL; in vec2 aLight;
-uniform mat4 uMVP; uniform vec3 uCam;
-out vec3 vUVL; out float vBright; out float vAlpha; out float vDist;
+layout(location = 0) in vec3 aPos; layout(location = 1) in vec3 aUVL; layout(location = 2) in vec2 aLight;
+layout(location = 3) in vec4 aExtra;
+uniform mat4 uMVP; uniform vec3 uCam; uniform float uTime; uniform float uWave; uniform mat4 uShadowMVP;
+out vec3 vUVL; out float vBright; out float vAlpha; out float vDist; out vec3 vLight; out vec3 vNormal;
+out vec4 vShadow; out vec3 vWorld; flat out int vKind; flat out int vFace;
+const vec3 N[7] = vec3[7](vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, -1), vec3(0, 0, 1), vec3(-1, 0, 0), vec3(1, 0, 0),
+                          vec3(0, 1, 0));
 void main() {
-  vUVL = aUVL; vBright = aLight.x; vAlpha = aLight.y;
-  vDist = length(aPos.xz - uCam.xz);
-  gl_Position = uMVP * vec4(aPos, 1.0);
+  int nk = int(aExtra.w + 0.5), face = nk / 8, kind = nk - face * 8;
+  vec3 p = aPos;
+  if (uWave > 0.5) {                            // leaves and grass move a little in the wind
+    if (kind == 2) p += vec3(sin(uTime * 1.6 + p.x * 0.9 + p.y * 0.4), sin(uTime * 1.1 + p.z * 0.7) * 0.5,
+                             cos(uTime * 1.3 + p.z * 0.8 + p.y * 0.6)) * 0.03;
+    else if (kind == 3 && aUVL.y < 0.5) p.xz += vec2(sin(uTime * 2.0 + p.x * 1.1 + p.z * 0.7),
+                                                     cos(uTime * 1.7 + p.z * 1.2 + p.x * 0.5)) * 0.07;
+  }
+  vUVL = aUVL; vBright = aLight.x; vAlpha = aLight.y; vLight = aExtra.xyz; vKind = kind; vFace = face;
+  vNormal = N[face]; vWorld = p;
+  vDist = length(p.xz - uCam.xz);
+  vShadow = uShadowMVP * vec4(p + N[face] * 0.06, 1.0);
+  gl_Position = uMVP * vec4(p, 1.0);
 }`;
 const FS = `#version 300 es
-precision mediump float; precision mediump sampler2DArray;
-in vec3 vUVL; in float vBright; in float vAlpha; in float vDist;
-uniform sampler2DArray uTex; uniform vec3 uFog; uniform vec2 uFogRange;
+precision highp float; precision mediump sampler2DArray; precision mediump sampler2DShadow;
+in vec3 vUVL; in float vBright; in float vAlpha; in float vDist; in vec3 vLight; in vec3 vNormal; in vec4 vShadow;
+in vec3 vWorld; flat in int vKind; flat in int vFace;
+uniform sampler2DArray uTex; uniform sampler2DShadow uShadow;
+uniform vec3 uFog; uniform vec2 uFogRange; uniform vec3 uCam; uniform float uTime;
+uniform float uShade; uniform float uShadowOn; uniform vec3 uShadowCentre; uniform float uShadowRange;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmb; uniform vec3 uZenith; uniform vec3 uHorizon;
+uniform float uDay; uniform float uNight; uniform vec2 uRes;
 out vec4 color;
+float shadowAt() {
+  vec3 p = vShadow.xyz / vShadow.w * 0.5 + 0.5;
+  if (p.x <= 0.002 || p.x >= 0.998 || p.y <= 0.002 || p.y >= 0.998 || p.z >= 1.0) return 1.0;
+  vec2 t = vec2(1.0 / 2048.0);
+  float d = p.z - 0.0006, s = 0.0;
+  s += texture(uShadow, vec3(p.xy + vec2(-0.6, -0.6) * t, d));
+  s += texture(uShadow, vec3(p.xy + vec2(0.6, -0.6) * t, d));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.6, 0.6) * t, d));
+  s += texture(uShadow, vec3(p.xy + vec2(0.6, 0.6) * t, d));
+  float fade = smoothstep(uShadowRange * 0.75, uShadowRange * 0.95, length(vWorld.xz - uShadowCentre.xz));
+  return mix(s * 0.25, 1.0, fade);
+}
+vec3 skyColour(vec3 d) {
+  vec3 c = mix(uHorizon, uZenith, sqrt(clamp(d.y, 0.0, 1.0)));
+  float toSun = max(dot(d, uSunDir), 0.0);
+  return c + uSunCol * (pow(toSun, 8.0) * 0.25 + pow(toSun, 300.0) * 3.0) * (1.0 - uNight);
+}
 void main() {
   vec4 t = texture(uTex, vUVL);
   float a = 1.0;
   if (vAlpha > 0.0) { a = vAlpha < 0.3 ? (t.a > 0.5 ? 1.0 : vAlpha) : vAlpha; }
   else if (t.a < 0.5) discard;
   float fog = clamp((vDist - uFogRange.x) / (uFogRange.y - uFogRange.x), 0.0, 1.0);
-  color = vec4(mix(t.rgb * vBright, uFog, fog), a);
+  float torch = pow(vLight.y, 2.2);
+  if (uShade < 0.5) {                           // plain Minecraft: the game's light at this time of day
+    float b = max(vBright * mix(0.18, 1.0, uDay), vKind == 4 ? 1.0 : torch * 0.95);
+    color = vec4(mix(t.rgb * b, uFog, fog), a);
+    return;
+  }
+  vec3 albedo = t.rgb, n = normalize(vNormal), view = normalize(vWorld - uCam);
+  float sky = vLight.x, ao = vLight.z;
+  float ndl = vKind == 3 ? 0.55 : max(dot(n, uSunDir), 0.0);
+  if (vKind == 2) ndl = max(ndl, 0.35);         // light shines through leaves
+  float open = smoothstep(0.55, 0.95, sky);     // only where the sky reaches: no sunshine in cellars
+  float sun = ndl * open;
+  if (uShadowOn > 0.5 && sun > 0.0) sun *= shadowAt();
+  float skyLight = sky * sky;
+  vec3 amb = uAmb * (0.25 + 0.75 * skyLight) * (0.78 + 0.22 * n.y) * ao;
+  vec3 lamp = vec3(1.0, 0.68, 0.38) * pow(vLight.y, 3.0) * 1.7 * mix(1.0, 0.25, uDay);   // lamps matter after dark
+  vec3 lit = albedo * (amb + uSunCol * sun + lamp + 0.015);
+  if (vKind == 4) lit = albedo * 1.9;           // lanterns glow
+  if (vKind == 1 && vFace == 0) {               // water: little waves, the sky mirrored in it, the sun glinting
+    vec2 q = vWorld.xz;
+    vec3 wn = normalize(vec3(sin(q.x * 1.3 + uTime * 1.4) * 0.05 + sin(q.x * 0.47 - q.y * 0.9 + uTime * 0.9) * 0.06,
+                             1.0, cos(q.y * 1.1 + uTime * 1.2) * 0.05 + sin(q.y * 0.53 + q.x * 0.7 - uTime) * 0.06));
+    vec3 r = reflect(view, wn);
+    float fres = 0.04 + 0.96 * pow(1.0 - max(dot(-view, wn), 0.0), 5.0);
+    vec3 refl = skyColour(r) * mix(0.35, 1.0, open);
+    lit = mix(lit, refl, clamp(fres * 1.6, 0.0, 0.85));
+    lit += uSunCol * pow(max(dot(r, uSunDir), 0.0), 220.0) * 2.5 * open * (uShadowOn > 0.5 ? shadowAt() : 1.0);
+    a = mix(0.62, 0.92, fres);
+  }
+  lit = vec3(1.0) - exp(-lit * 1.25);           // soft highlights, like film
+  float luma = dot(lit, vec3(0.299, 0.587, 0.114));
+  lit = mix(vec3(luma), lit, 1.22);             // a little more colour
+  vec3 fogCol = mix(uFog, uSunCol * 0.9 + uFog * 0.4, pow(max(dot(view, uSunDir), 0.0), 6.0) * 0.45 * (1.0 - uNight));
+  float haze = 1.0 - exp(-vDist * 0.0016);      // far things fade into the air before the fog edge
+  lit = mix(lit, fogCol, max(fog, haze * 0.55));
+  vec2 v = gl_FragCoord.xy / uRes - 0.5;
+  lit *= 1.0 - 0.32 * dot(v, v);                // a soft dark edge round the picture
+  color = vec4(lit, a);
 }`;
 const SKY_VS = `#version 300 es
 in vec2 aPos; out vec2 vNdc;
@@ -310,21 +415,55 @@ precision highp float;
 in vec2 vNdc;
 uniform vec3 uRight; uniform vec3 uUp; uniform vec3 uFwd; uniform vec2 uTan; uniform vec3 uCam;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform float uCloudY;
+uniform float uShade; uniform vec3 uSunDir; uniform vec3 uSunCol; uniform float uNight; uniform vec3 uMoonDir;
+uniform vec2 uRes; uniform float uTime;
 out vec4 color;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   vec3 d = normalize(uFwd + vNdc.x * uTan.x * uRight + vNdc.y * uTan.y * uUp);
   float up = sqrt(clamp(d.y, 0.0, 1.0));
   vec3 c = mix(uHorizon, uZenith, up);
+  float toSun = max(dot(d, uSunDir), 0.0);
+  if (uShade > 0.5) {
+    c += uSunCol * (pow(toSun, 6.0) * 0.28 + pow(toSun, 60.0) * 0.35) * (1.0 - uNight);
+    if (uNight > 0.0) {                         // stars, and the moon
+      vec2 cell = floor(vec2(atan(d.z, d.x), asin(clamp(d.y, -1.0, 1.0))) * 160.0);
+      float star = step(0.9965, hash(cell)) * smoothstep(0.02, 0.25, d.y);
+      c += vec3(star) * uNight * 0.9;
+      c += vec3(0.85, 0.9, 1.0) * smoothstep(0.99955, 0.9997, dot(d, uMoonDir)) * uNight;
+    }
+  }
   if (d.y > 0.015) {
     float t = (uCloudY - uCam.y) / d.y;
-    vec2 p = floor((uCam.xz + d.xz * t) / 12.0);
+    vec2 p = floor((uCam.xz + d.xz * t + vec2(uTime * 1.5, 0.0) * uShade) / 12.0);
     float h = 0.0;
     for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) h += hash(p + vec2(float(i), float(j)) * 1.0 + floor(p / 7.0) * 3.1);
     float cover = step(5.1, h) * clamp(1.25 - t / 2600.0, 0.0, 1.0) * 0.92;
-    c = mix(c, vec3(1.0), cover);
+    vec3 cloud = uShade > 0.5 ? mix(vec3(0.06, 0.07, 0.1), uSunCol * 0.55 + uHorizon * 0.55 + 0.12, 1.0 - uNight * 0.92)
+                              : vec3(1.0);
+    c = mix(c, min(cloud, vec3(1.0)), cover);
+  }
+  if (uShade > 0.5) {
+    c += uSunCol * smoothstep(0.99955, 0.99975, toSun) * 4.0 * (1.0 - uNight);    // the sun itself
+    vec2 v = gl_FragCoord.xy / uRes - 0.5;
+    c *= 1.0 - 0.32 * dot(v, v);
   }
   color = vec4(c, 1.0);
+}`;
+// the shadow map: the world seen from the sun, depth only
+const SHADOW_VS = `#version 300 es
+layout(location = 0) in vec3 aPos; layout(location = 1) in vec3 aUVL; layout(location = 3) in vec4 aExtra;
+uniform mat4 uMVP; out vec3 vUVL; flat out int vKind;
+void main() {
+  int nk = int(aExtra.w + 0.5); vKind = nk - (nk / 8) * 8;
+  vUVL = aUVL; gl_Position = uMVP * vec4(aPos, 1.0);
+}`;
+const SHADOW_FS = `#version 300 es
+precision mediump float; precision mediump sampler2DArray;
+in vec3 vUVL; flat in int vKind; uniform sampler2DArray uTex; out vec4 color;
+void main() {
+  if (vKind == 3 || vKind == 1 || texture(uTex, vUVL).a < 0.5) discard;    // grass and water cast no shadow
+  color = vec4(1.0);
 }`;
 
 function compile(gl, vs, fs) {
@@ -395,9 +534,29 @@ async function main() {
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, 3);
 
-  const prog = compile(gl, VS, FS), sky = compile(gl, SKY_VS, SKY_FS);
-  const loc = n => gl.getUniformLocation(prog, n), sloc = n => gl.getUniformLocation(sky, n);
-  const aPos = gl.getAttribLocation(prog, "aPos"), aUVL = gl.getAttribLocation(prog, "aUVL"), aLight = gl.getAttribLocation(prog, "aLight");
+  const prog = compile(gl, VS, FS), sky = compile(gl, SKY_VS, SKY_FS), shadowProg = compile(gl, SHADOW_VS, SHADOW_FS);
+  const locs = new Map(), uni = (pr, n) => {     // uniform locations, looked up once
+    const k = n + (pr === prog ? 0 : pr === sky ? 1 : 2);
+    if (!locs.has(k)) locs.set(k, gl.getUniformLocation(pr, n));
+    return locs.get(k);
+  };
+  const loc = n => uni(prog, n), sloc = n => uni(sky, n);
+
+  // the shadow map: 2048 x 2048 depths, seen from the sun, around the player
+  const SHADOW_SIZE = 2048, SHADOW_RANGE = 96;
+  const shadowTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, shadowTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+  const shadowFb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowTex, 0);
+  gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+  const shadowOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   const skyVao = gl.createVertexArray();
   gl.bindVertexArray(skyVao);
   const skyBuf = gl.createBuffer();
@@ -423,11 +582,12 @@ async function main() {
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    const stride = 32;
-    gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
-    gl.enableVertexAttribArray(aUVL); gl.vertexAttribPointer(aUVL, 3, gl.FLOAT, false, stride, 12);
-    gl.enableVertexAttribArray(aLight); gl.vertexAttribPointer(aLight, 2, gl.FLOAT, false, stride, 24);
-    const quads = data.length / 32;
+    const stride = 48;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 24);
+    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, stride, 32);
+    const quads = data.length / 48;
     ensureIndices(quads);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuf);
     gl.bindVertexArray(null);
@@ -436,6 +596,43 @@ async function main() {
   const meshes = new Map();                     // chunk key -> {opaque, translucent, cx, cz}
   const CX = Math.ceil(world.X / 16), CZ = Math.ceil(world.Z / 16);
   function freeMesh(m) { for (const part of [m.opaque, m.translucent]) if (part) { gl.deleteBuffer(part.buf); gl.deleteVertexArray(part.vao); } }
+
+  // ---------------------------------------------------------------- the sun, where it really is over this place today
+  const LAT = (info.lat ?? 45) * Math.PI / 180;
+  const today = new Date(), dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 864e5);
+  const DECL = -23.44 * Math.PI / 180 * Math.cos(2 * Math.PI / 365 * (dayOfYear + 10));
+  function sunAt(hour) {                        // direction to the sun at this solar time: x east, y up, z south
+    const h = (hour - 12) * 15 * Math.PI / 180;
+    const east = -Math.cos(DECL) * Math.sin(h);
+    const north = Math.sin(DECL) * Math.cos(LAT) - Math.cos(DECL) * Math.cos(h) * Math.sin(LAT);
+    const up = Math.sin(DECL) * Math.sin(LAT) + Math.cos(DECL) * Math.cos(h) * Math.cos(LAT);
+    return [east, up, -north];
+  }
+  let sunsetHour = 18;                          // when the sun is 3 degrees above the horizon in the evening
+  for (let hr = 12; hr < 22; hr += 0.02) if (sunAt(hr)[1] < Math.sin(3 * Math.PI / 180)) { sunsetHour = hr; break; }
+  const TIMES = [["morning", 8.5], ["midday", 12.5], ["afternoon", 15.5], ["sunset", sunsetHour], ["night", 22]];
+  let timeIndex = 2, shaderLevel = TOUCH ? 1 : 2;  // 2: sun and shadows, 1: sun without shadows, 0: plain Minecraft
+  let shadowDirty = true;
+  const mix3 = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  function lighting() {
+    const hour = TIMES[timeIndex][1], sun = sunAt(hour), e = sun[1];
+    const day = smooth(-0.1, 0.22, e), low = 1 - smooth(0.04, 0.5, e), night = 1 - smooth(-0.12, 0.02, e);
+    const zenith = mix3(mix3(info.zenith, [0.28, 0.4, 0.72], low * 0.8), [0.006, 0.01, 0.03], night);
+    const horizon = mix3(mix3(info.horizon, [1.0, 0.62, 0.36], low * 0.85), [0.03, 0.04, 0.08], night);
+    let sunCol = mix3([1.1, 1.02, 0.9], [1.2, 0.58, 0.26], low).map(v => v * smooth(-0.02, 0.1, e) * 1.3);
+    const amb = mix3(mix3([0.3, 0.38, 0.56], [0.42, 0.34, 0.42], low), [0.06, 0.08, 0.14], night);
+    let dir = sun;
+    const moon = sunAt(hour - 12).map(v => -v);
+    const moonDir = [moon[0] * 0.6, Math.max(0.55, Math.abs(moon[1])), moon[2] * 0.6];
+    const ml = Math.hypot(...moonDir); moonDir.forEach((v, i) => { moonDir[i] = v / ml; });
+    if (e < 0.02) {                             // after dark the moon lights the place, weak and blue
+      dir = moonDir;
+      sunCol = sunCol.map((v, i) => v + [0.2, 0.26, 0.42][i] * night * 0.75);
+    }
+    return { hour, sunDir: dir, sunCol, amb, zenith, horizon, day, night, moonDir };
+  }
+  const clock = h => `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60) % 60).padStart(2, "0")}`;
 
   // ---------------------------------------------------------------- the player
   const S = info.spawn;
@@ -551,6 +748,8 @@ async function main() {
     if (e.code === "KeyF") player.fly = !player.fly;
     if (e.code === "KeyR") respawn();
     if (e.code === "KeyJ") autoJump = !autoJump;
+    if (e.code === "KeyT") { timeIndex = (timeIndex + 1) % TIMES.length; shadowDirty = true; }
+    if (e.code === "KeyG") { shaderLevel = (shaderLevel + 2) % 3; shadowDirty = true; }
     if (/^Digit[1-4]$/.test(e.code)) speedLevel = Number(e.code.slice(5)) - 1;
     if (e.code === "BracketLeft") renderDistance = Math.max(3, renderDistance - 2);
     if (e.code === "BracketRight") renderDistance = Math.min(24, renderDistance + 2);
@@ -649,6 +848,7 @@ async function main() {
     }
     return list.sort((a, b) => a[0] - b[0]);
   }
+  let meshesChanged = false;
   function buildSome(budgetMs) {
     const t0 = performance.now();
     let built = 0;
@@ -658,6 +858,7 @@ async function main() {
       const data = buildChunk(world, cx, cz);
       meshes.set(key, { cx, cz, opaque: upload(data.opaque), translucent: upload(data.translucent) });
       built++;
+      meshesChanged = true;
       if (performance.now() - t0 > budgetMs) break;
     }
     const pcx = player.x / 16, pcz = player.z / 16, far = (renderDistance + 2) ** 2;
@@ -678,6 +879,39 @@ async function main() {
   let last = performance.now(), frames = 0, fps = 0, fpsTime = last;
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
+  let shadowMVP = new Array(16).fill(0), shadowCentre = [NaN, 0, 0], lastShadow = 0;
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(...a) || 1; return a.map(v => v / l); };
+  function renderShadows(L, now) {              // only when the player has moved 8 blocks, the sun moved or new chunks came
+    const c = [Math.round(player.x / 8) * 8, Math.round(player.y / 8) * 8, Math.round(player.z / 8) * 8];
+    const moved = c.some((v, i) => v !== shadowCentre[i]);
+    if (!(shadowDirty || ((moved || meshesChanged) && now - lastShadow > 250))) return;    // at most 4 times a second
+    shadowDirty = false; meshesChanged = false; lastShadow = now; shadowCentre = c;
+    const f = L.sunDir.map(v => -v);
+    const r = norm(cross(f, Math.abs(f[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0])), u = cross(r, f);
+    const eye = c.map((v, i) => v - f[i] * 250), R = SHADOW_RANGE, near = 1, far = 520;
+    const ortho = [1 / R, 0, 0, 0, 0, 1 / R, 0, 0, 0, 0, -2 / (far - near), 0, 0, 0, -(far + near) / (far - near), 1];
+    shadowMVP = mul(ortho, viewMatrix(eye, r, u, f));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFb);
+    gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(shadowProg);
+    gl.uniformMatrix4fv(uni(shadowProg, "uMVP"), false, new Float32Array(shadowMVP));
+    gl.uniform1i(uni(shadowProg, "uTex"), 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.5, 3.0);
+    const M = shadowMVP, edge = 1 + 14 / R;     // only the chunks the sun's view of the area can see
+    const sx = (x, y, z) => [M[0] * x + M[4] * y + M[8] * z + M[12], M[1] * x + M[5] * y + M[9] * z + M[13]];
+    for (const m of meshes.values()) {
+      if (!m.opaque) continue;
+      const x = m.cx * 16 + 8, z = m.cz * 16 + 8, a = sx(x, c[1] - 48, z), b = sx(x, c[1] + 72, z);
+      if (Math.max(a[0], b[0]) < -edge || Math.min(a[0], b[0]) > edge || Math.max(a[1], b[1]) < -edge || Math.min(a[1], b[1]) > edge) continue;
+      gl.bindVertexArray(m.opaque.vao); gl.drawElements(gl.TRIANGLES, m.opaque.count, gl.UNSIGNED_INT, 0);
+    }
+    gl.disable(gl.POLYGON_OFFSET_FILL); gl.enable(gl.CULL_FACE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
   function frame(now) {
     let dt = Math.min(0.25, (now - last) / 1000);  // on a slow computer: several small physics steps per frame
     last = now;
@@ -690,15 +924,20 @@ async function main() {
     const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
     const aspect = canvas.width / canvas.height, fov = 70 * Math.PI / 180, dist = renderDistance * 16;
     const mvp = mul(perspective(fov, aspect, 0.05, dist + 64), viewMatrix(eye, r, u, f));
+    const L = lighting(), shade = shaderLevel > 0 ? 1 : 0, shadows = shaderLevel === 2 && shadowOk, t = now / 1000;
+    if (shadows) renderShadows(L, now);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    // sky and clouds
+    // sky, sun, moon, stars and clouds
     gl.useProgram(sky);
     gl.depthMask(false);
     gl.uniform3fv(sloc("uRight"), r); gl.uniform3fv(sloc("uUp"), u); gl.uniform3fv(sloc("uFwd"), f);
     gl.uniform2f(sloc("uTan"), Math.tan(fov / 2) * aspect, Math.tan(fov / 2));
-    gl.uniform3fv(sloc("uCam"), eye); gl.uniform3fv(sloc("uZenith"), info.zenith); gl.uniform3fv(sloc("uHorizon"), info.horizon);
+    gl.uniform3fv(sloc("uCam"), eye); gl.uniform3fv(sloc("uZenith"), L.zenith); gl.uniform3fv(sloc("uHorizon"), L.horizon);
     gl.uniform1f(sloc("uCloudY"), 192 - info.yMin);
+    gl.uniform1f(sloc("uShade"), shade); gl.uniform3fv(sloc("uSunDir"), L.sunDir); gl.uniform3fv(sloc("uSunCol"), L.sunCol);
+    gl.uniform1f(sloc("uNight"), L.night); gl.uniform3fv(sloc("uMoonDir"), L.moonDir);
+    gl.uniform2f(sloc("uRes"), canvas.width, canvas.height); gl.uniform1f(sloc("uTime"), t);
     gl.bindVertexArray(skyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.depthMask(true);
@@ -706,11 +945,22 @@ async function main() {
     gl.useProgram(prog);
     gl.uniformMatrix4fv(loc("uMVP"), false, new Float32Array(mvp));
     gl.uniform3fv(loc("uCam"), eye);
-    gl.uniform3fv(loc("uFog"), info.horizon);
+    gl.uniform3fv(loc("uFog"), L.horizon);
     gl.uniform2f(loc("uFogRange"), dist - Math.min(Math.max(dist / 10, 4), 64), dist);
-    gl.uniform1i(loc("uTex"), 0);
+    gl.uniform1f(loc("uTime"), t); gl.uniform1f(loc("uWave"), shade);
+    gl.uniform1f(loc("uShade"), shade); gl.uniform1f(loc("uShadowOn"), shadows ? 1 : 0);
+    gl.uniformMatrix4fv(loc("uShadowMVP"), false, new Float32Array(shadowMVP));
+    gl.uniform3fv(loc("uShadowCentre"), shadowCentre.map(v => v || 0)); gl.uniform1f(loc("uShadowRange"), SHADOW_RANGE);
+    gl.uniform3fv(loc("uSunDir"), L.sunDir); gl.uniform3fv(loc("uSunCol"), L.sunCol); gl.uniform3fv(loc("uAmb"), L.amb);
+    gl.uniform3fv(loc("uZenith"), L.zenith); gl.uniform3fv(loc("uHorizon"), L.horizon);
+    gl.uniform1f(loc("uDay"), L.day); gl.uniform1f(loc("uNight"), L.night);
+    gl.uniform2f(loc("uRes"), canvas.width, canvas.height);
+    gl.uniform1i(loc("uTex"), 0); gl.uniform1i(loc("uShadow"), 1);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, shadowTex);
+    gl.activeTexture(gl.TEXTURE0);
     gl.disable(gl.BLEND);
     for (const m of meshes.values()) if (m.opaque) { gl.bindVertexArray(m.opaque.vao); gl.drawElements(gl.TRIANGLES, m.opaque.count, gl.UNSIGNED_INT, 0); }
     gl.enable(gl.BLEND);
@@ -730,11 +980,14 @@ async function main() {
     const facing = dirs[((Math.round(p.yaw / (Math.PI / 2)) % 4) + 4) % 4];
     $("hud").textContent = `${info.name}\nXYZ: ${(p.x - Math.floor(world.X / 2)).toFixed(1)} / ${(p.y + info.yMin).toFixed(1)} / ${(p.z - Math.floor(world.Z / 2)).toFixed(1)}\n` +
       `Facing: ${facing}${p.fly ? "   (flying)" : p.sprint ? "   (sprinting)" : ""}${autoJump ? "" : "   auto-jump off"}` +
-      `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps`;
+      `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps` +
+      `\nTime: ${TIMES[timeIndex][0]} (${clock(L.hour)} sun time, the real sun for this place today)   ` +
+      `Shaders: ${["off (plain Minecraft)", "sun", "sun and shadows"][shaderLevel]}`;
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__walk = { player, world, meshes, keys, play, update, collides, respawn };   // for tests
+  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt,      // for tests
+                    setTime: i => { timeIndex = i; shadowDirty = true; }, setShaders: i => { shaderLevel = i; shadowDirty = true; } };
 }
 main().catch(e => { $("title").textContent = "Something went wrong"; setStatus(String(e && e.message || e)); console.error(e); });
 </script>

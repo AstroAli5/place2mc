@@ -37,6 +37,7 @@ for el in [
     way([(6, 12), (34, 12), (34, 36), (6, 36), (6, 12)], barrier="fence"),
     way([(-45, 15), (-10, 15), (-10, 42)], barrier="wall", height="2"),
     way([(-45, -14), (-10, -32)], barrier="hedge"),
+    way([(-100, 60), (-70, 60), (-70, 90)], barrier="wall", material="brick", height="2.6"),
     way([(-100, -55), (0, -55), (50, -85), (100, -85)], railway="rail"),
     way([(-100, 2), (100, 2)], railway="tram"),
     node(40, 8, amenity="bench"), node(-35, -7, amenity="bench"), node(16, 28, amenity="bench"),
@@ -61,7 +62,7 @@ SIDES = {"north": (0, -1, 0), "south": (0, 1, 0), "west": (0, 0, -1), "east": (0
 OPPOSITE = {"north": "south", "south": "north", "west": "east", "east": "west"}
 
 # fences and walls: every joined side has a fence/wall/building wall there, and the neighbour joins back
-for y, z, x in zip(*np.nonzero(np.isin(vol, p.FENCES + p.GARDEN_WALLS))):
+for y, z, x in zip(*np.nonzero(np.isin(vol, p.FENCES + p.GARDEN_WALLS + p.BRICK_WALLS))):
     b = vol[y, z, x]
     for side, (dy, dz, dx) in SIDES.items():
         nb = vol[y, z + dz, x + dx]
@@ -73,7 +74,7 @@ for y, z, x in zip(*np.nonzero(np.isin(vol, p.FENCES + p.GARDEN_WALLS))):
             problems.append(f"{names[b]} at {x},{y},{z} does not join the {names[nb]} to its {side}")
         if same_kind and joined and props[nb].get(OPPOSITE[side]) not in ("true", "low", "tall"):
             problems.append(f"{names[b]} at {x},{y},{z} joins {side} but the neighbour does not join back")
-    if names[b] == "stone_brick_wall":
+    if names[b] in ("stone_brick_wall", "brick_wall"):
         sides = {s for s in SIDES if props[b].get(s) == "low"}
         straight = sides in ({"north", "south"}, {"west", "east"})
         if (props[b].get("up") == "false") != straight:
@@ -95,7 +96,10 @@ for y, z, x in rail_cells:
     for s in beside:
         if s not in JOINS[shape] and len(set(beside)) <= 2:
             problems.append(f"rail at {x},{y},{z} ({shape}) does not turn towards the rail to its {s}")
-print(f"checked {int(np.isin(vol, p.FENCES).sum())} fence, {int(np.isin(vol, p.GARDEN_WALLS).sum())} wall, "
+bricks = int(np.isin(vol, p.BRICK_WALLS).sum())
+if bricks < 50:
+    problems.append(f"brick wall: only {bricks} brick wall tops")
+print(f"checked {int(np.isin(vol, p.FENCES).sum())} fence, {int(np.isin(vol, p.GARDEN_WALLS).sum())} wall, {bricks} brick wall, "
       f"{int((vol == p.HEDGE).sum())} hedge and leaf, {len(rail_cells)} rail blocks")
 
 # zebra crossings: white stripes across the road at x=-20 (footway) and x=25 (point)
