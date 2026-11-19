@@ -300,7 +300,7 @@ or download `Walk around ALA.html` and open it. Its tag file shows how to make a
 
 | Version | |
 |---|---|
-| **1.8** | Real heights from laser scans in the US: every roof, tower and tree as measured; Franklin & Marshall College as the example |
+| **1.8** | Real heights from laser scans in the US: every roof, tower and tree as measured; insides built for what each building is (library, chapel, pool, gym, dorm, theatre, dining hall, museum, lab, classroom); name signs at every named building and "where am I" in the walk-through; autumn leaves by date; Franklin & Marshall College as the example |
 | **1.7** | The walk-through moves exactly like the game (8 measurements, all match); creative mode to break and place blocks, with a hotbar, kept in your browser; a map of the code made with [graphify](https://github.com/Graphify-Labs/graphify) |
 | **1.6** | Spotify in the walk-through; stop and give-way signs on the right side of the road for each country, bus stops with shelters, fire hydrants, bins, street lamps where the real ones are |
 | **1.5** | Street-name signs with the real names (Java, Bedrock, walk-through); "now": the real sun this minute |

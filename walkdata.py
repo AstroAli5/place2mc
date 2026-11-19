@@ -91,7 +91,7 @@ VIEWER = Path(__file__).resolve().parent / "app" / "walk.html"
 
 
 def export(vol, out_path, spawn, name, textures="auto", credit="Map data © OpenStreetMap contributors", latlon=None,
-           signs=(), spawn_yaw=None):
+           signs=(), spawn_yaw=None, labels=None):
     """Write the walk-through HTML file. spawn: where the feet are, in Minecraft coordinates (x, y, z), as
     choose_spawn gives it; the centre of the built square is x=0, z=0."""
     out_path = Path(out_path)
@@ -127,6 +127,11 @@ def export(vol, out_path, spawn, name, textures="auto", credit="Map data © Open
                      for y, z, x, r, lines, colour in signs]
     if latlon:                                  # for the sun: where it stands over this place on the day you walk
         info["lat"], info["lon"] = round(float(latlon[0]), 5), round(float(latlon[1]), 5)
+    if labels is not None:                       # place names, so the walker knows where they are
+        names, layers = labels
+        info["places"] = {"names": list(names), "step": int(-(-vol.shape[1] // layers.shape[1])) if layers.shape[1] else 2,
+                          "n": int(layers.shape[1]),
+                          "bin": base64.b64encode(gzip.compress(np.ascontiguousarray(layers, dtype="<u2").tobytes(), 6)).decode("ascii")}
     data = {"info": info, "bin": base64.b64encode(packed).decode("ascii"),
             "atlas": base64.b64encode(png.getvalue()).decode("ascii")}
     page = VIEWER.read_text(encoding="utf-8")

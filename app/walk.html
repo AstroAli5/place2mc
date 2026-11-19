@@ -12,6 +12,10 @@
   #cross::before, #cross::after { content: ""; position: absolute; background: #fff; }
   #cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
   #cross::after { top: 8px; left: 0; width: 18px; height: 2px; }
+  #place { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); color: #fff; font: 600 18px/1.3 system-ui,
+           sans-serif; text-shadow: 0 1px 3px #000c; pointer-events: none; white-space: nowrap; max-width: 90vw;
+           overflow: hidden; text-overflow: ellipsis; }
+  #place:empty { display: none; }
   #hud { position: fixed; left: 8px; top: 6px; color: #fff; text-shadow: 1px 1px 0 #3f3f3f; font: 13px/1.5 monospace;
          pointer-events: none; white-space: pre; }
   #start { position: fixed; inset: 0; display: flex; overflow-y: auto; padding: 10px;
@@ -56,6 +60,7 @@
 <canvas id="c"></canvas>
 <div id="cross"></div>
 <div id="hud"></div>
+<div id="place"></div>
 <div id="credit"></div>
 <div id="stick" class="touch"><div id="knob"></div></div>
 <div id="hotbar"></div>
@@ -407,7 +412,7 @@ uniform sampler2DArray uTex; uniform sampler2DShadow uShadow;
 uniform vec3 uFog; uniform vec2 uFogRange; uniform vec3 uCam; uniform float uTime;
 uniform float uShade; uniform float uShadowOn; uniform vec3 uShadowCentre; uniform float uShadowRange;
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmb; uniform vec3 uZenith; uniform vec3 uHorizon;
-uniform float uDay; uniform float uNight; uniform vec2 uRes;
+uniform float uDay; uniform float uNight; uniform vec2 uRes; uniform float uAutumn;
 out vec4 color;
 float shadowAt() {
   vec3 p = vShadow.xyz / vShadow.w * 0.5 + 0.5;
@@ -428,6 +433,13 @@ vec3 skyColour(vec3 d) {
 }
 void main() {
   vec4 t = texture(uTex, vUVL);
+  if (vKind == 2 && uAutumn > 0.0) {            // autumn: each tree's leaves turn orange, red, yellow or brown
+    float h = fract(sin(dot(floor(vWorld.xz * 0.2), vec2(12.9898, 78.233))) * 43758.5453);
+    vec3 au = h < 0.38 ? vec3(0.88, 0.46, 0.12) : h < 0.66 ? vec3(0.80, 0.20, 0.09) : h < 0.88 ? vec3(0.86, 0.70, 0.18)
+                                                                                     : vec3(0.48, 0.33, 0.16);
+    float lum = dot(t.rgb, vec3(0.30, 0.59, 0.11));
+    t.rgb = mix(t.rgb, au * lum * 2.5, uAutumn);
+  }
   float a = 1.0;
   if (vAlpha > 0.0) { a = vAlpha < 0.3 ? (t.a > 0.5 ? 1.0 : vAlpha) : vAlpha; }
   else if (t.a < 0.5) discard;
@@ -578,6 +590,57 @@ async function main() {
   setStatus("Getting the blocks ready…");
   await new Promise(r => setTimeout(r, 0));
   const world = new World(info, runs);
+  // place names (buildings, streets, parks), so the walker knows where they are
+  let PLACES = null;
+  if (info.places && info.places.n) {
+    const s = atob(info.places.bin);
+    let u = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    u = new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+    PLACES = { names: info.places.names, step: info.places.step, n: info.places.n, grid: new Uint16Array(u.buffer) };
+  }
+  function placeLayer(layer, x, z) {
+    if (!PLACES) return 0;
+    const cx = Math.floor(x / PLACES.step), cz = Math.floor(z / PLACES.step), n = PLACES.n;
+    if (cx < 0 || cz < 0 || cx >= n || cz >= n) return 0;
+    return PLACES.grid[layer * n * n + cz * n + cx];
+  }
+  function nearestBuilding(x, z, reach) {          // the nearest named building within `reach` blocks
+    if (!PLACES) return 0;
+    const st = PLACES.step, r = Math.ceil(reach / st);
+    let best = 0, bestD = 1e9;
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      const id = placeLayer(0, x + dx * st, z + dz * st), d = dx * dx + dz * dz;
+      if (id && d < bestD) { best = id; bestD = d; }
+    }
+    return best;
+  }
+  function whereAmI(p) {
+    if (!PLACES) return "";
+    const N = PLACES.names, inside = placeLayer(0, p.x, p.z), street = placeLayer(1, p.x, p.z), area = placeLayer(2, p.x, p.z);
+    const near = inside ? 0 : nearestBuilding(p.x, p.z, 30);
+    let here = inside ? "Inside " + N[inside] : near ? "By " + N[near] : street ? "On " + N[street] : area ? "In " + N[area] : "";
+    if (!inside && near && street) here += ", " + N[street];
+    if (area && !here.startsWith("In " + N[area])) here += here ? " (" + N[area] + ")" : "In " + N[area];
+    return here;
+  }
+  function lookingAt(p) {                           // the named building in the middle of the view, up to 160 blocks
+    if (!PLACES) return "";
+    const cp = Math.cos(p.pitch), d = [Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp];
+    let x = p.x, y = p.y + p.eye, z = p.z;
+    for (let t = 0; t < 320; t++) {
+      x += d[0] * 0.5; y += d[1] * 0.5; z += d[2] * 0.5;
+      if (y < 0 || y >= world.H) break;
+      const b = world.get(Math.floor(x), Math.floor(y), Math.floor(z));
+      const B = b && info.blocks[b];
+      if (B && B.opaque && !B.name.endsWith("_leaves")) {      // looks through leaves, glass and plants
+        const id = placeLayer(0, x, z) || nearestBuilding(x, z, 2);
+        return id ? PLACES.names[id] : "";
+      }
+    }
+    return "";
+  }
+  let placeText = "", placeTime = 0;
   $("title").textContent = info.name;
   $("subtitle").textContent = `${info.sizeX} × ${info.sizeZ} blocks, 1 block = 1 metre. Textures: ${info.textures}.`;
   $("credit").textContent = (info.credit || "Map data © OpenStreetMap contributors") + (info.textures.startsWith("Pixel") ? " · Textures: Pixel Perfection CE, CC BY-SA 4.0" : "");
@@ -747,6 +810,17 @@ async function main() {
   // ---------------------------------------------------------------- the sun, where it really is over this place today
   const LAT = (info.lat ?? 45) * Math.PI / 180;
   const today = new Date(), dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 864e5);
+  // the season of the leaves, where trees lose them in winter (between about 28 and 60 degrees from the equator):
+  // they turn from early October, are at their most coloured from late October to late November, and are mostly gone
+  // by mid-December (six months later south of the equator); the walk-through shows them as they are today
+  const AUTUMN = (() => {
+    const lat = Math.abs(info.lat || 0);
+    if (lat < 28 || lat > 60) return 0;
+    const d = ((info.lat || 0) < 0 ? dayOfYear + 182 : dayOfYear) % 365;
+    if (d < 270 || d > 350) return 0;
+    if (d < 298) return (d - 270) / 28;
+    return d <= 330 ? 1 : 1 - (d - 330) / 40;
+  })();
   const DECL = -23.44 * Math.PI / 180 * Math.cos(2 * Math.PI / 365 * (dayOfYear + 10));
   function sunAt(hour) {                        // direction to the sun at this solar time: x east, y up, z south
     const h = (hour - 12) * 15 * Math.PI / 180;
@@ -1577,6 +1651,7 @@ async function main() {
     else gl.uniform2f(loc("uFogRange"), dist - Math.min(Math.max(dist / 10, 4), 64), dist);
     gl.uniform1f(loc("uTime"), t); gl.uniform1f(loc("uWave"), shade);
     gl.uniform1f(loc("uShade"), shade); gl.uniform1f(loc("uShadowOn"), shadows ? 1 : 0);
+    gl.uniform1f(loc("uAutumn"), AUTUMN);
     gl.uniformMatrix4fv(loc("uShadowMVP"), false, new Float32Array(shadowMVP));
     gl.uniform3fv(loc("uShadowCentre"), shadowCentre.map(v => v || 0)); gl.uniform1f(loc("uShadowRange"), SHADOW_RANGE);
     gl.uniform3fv(loc("uSunDir"), L.sunDir); gl.uniform3fv(loc("uSunCol"), L.sunCol); gl.uniform3fv(loc("uAmb"), L.amb);
@@ -1638,7 +1713,13 @@ async function main() {
     if (now - fpsTime > 500) { fps = Math.round(frames * 1000 / (now - fpsTime)); frames = 0; fpsTime = now; }
     const dirs = ["north", "east", "south", "west"];
     const facing = dirs[((Math.round(p.yaw / (Math.PI / 2)) % 4) + 4) % 4];
-    $("hud").textContent = `${info.name}\nXYZ: ${(p.x - Math.floor(world.X / 2)).toFixed(1)} / ${(p.y + info.yMin).toFixed(1)} / ${(p.z - Math.floor(world.Z / 2)).toFixed(1)}\n` +
+    if (now - placeTime > 300) {                     // where you are, and what you are looking at
+      placeTime = now;
+      const here = whereAmI(p), seen = lookingAt(p);
+      placeText = (here ? "\n\u25b8 " + here : "") + (seen && !here.includes(seen) ? "\nLooking at: " + seen : "");
+      $("place").textContent = here || "";
+    }
+    $("hud").textContent = `${info.name}${placeText}\nXYZ: ${(p.x - Math.floor(world.X / 2)).toFixed(1)} / ${(p.y + info.yMin).toFixed(1)} / ${(p.z - Math.floor(world.Z / 2)).toFixed(1)}\n` +
       `Facing: ${facing}${p.fly ? "   (flying)" : p.sprint ? "   (sprinting)" : ""}${autoJump ? "" : "   auto-jump off"}` +
       `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps` +
       `\nTime: ${TIMES[timeIndex][0]} (${clock(L.hour)} sun time, the real sun for this place today)   ` +
@@ -1647,7 +1728,7 @@ async function main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt, sound, signs: SIGN_TEXT,
+  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt, sound, signs: SIGN_TEXT, autumn: AUTUMN,
                     aimed, breakBlock, placeBlock, pickBlock, setBlock, hotbar, myBlocks, stale,      // for tests
                     buildAll: () => { let n = 0; while (buildSome(2000)) n++; return n; },
                     setTime: i => { timeIndex = i; shadowDirty = true; }, setShaders: i => { shaderLevel = i; shadowDirty = true; } };

@@ -114,10 +114,19 @@ Old Main's tower 36 blocks (scan 36.0 m, archives 121 ft = 36.9 m). Tags: every 
 Steinman checked on photos), sloped roofs slate #505055 (-> deepslate tiles; #56575c gave dark prismarine), Steinman
 white flat roof, Winter Visual Arts Center (2020, after the scan) 3 storeys 15 m white/glass from published facts.
 Fixed: inland water with hills crashed (real[sea].max() on no sea); world names keep & ' ( ).
+Then ("work on those, label the places, build what's inside"): building_use (place2mc:inside tag, else name/tags) +
+furnish_by_use (library/pool/chapel/dorm/gym/theatre/dining/museum/lab/classroom; HALL_USES get one open room), a name
+sign at the main door of every named building, place_labels -> walkdata info.places (2-block grid, layers: building,
+street, area) -> walk.html whereAmI/lookingAt (HUD + #place line), AUTUMN leaf tint by date (lat 28-60), tag files
+take "replace" (corrections), F&M colours checked on Google Earth 3D (May 2024; slate #777a80 -> stone bricks,
+Lombardo light/white), 10 names corrected from F&M's campus map; tests/check_inside.py. Computer use is not turned on
+on Ali's PC (and CLAUDE.md says no Minecraft there), so the real game is still unchecked.
 Also: --spawn LAT,LON[,FACING] (choose_spawn near a point; walk.html info.spawnYaw); the walk-through credits the
 USGS scan. F&M delivered to Ali's Downloads (Java zip, .mcworld, walk-through) and published as a claude.ai page; the
-walk-through is in examples/fandm (raw.githack.com link in its README). Not checked: the real game, leaf season (trees
-are summer-green), colours of buildings other than Old Main and Steinman (assumed brick), the interiors (made up).
+walk-through is in examples/fandm (raw.githack.com link in its README). Not checked: the real game; the Java/Bedrock
+trees stay summer-green (the game has no seasons; only the walk-through turns them); room layouts are made up (the use
+of each building is not). Dorm rooms line every outside wall (distance from the wall along the nearer axis, rooms up to
+4 deep, corridor in the middle), so L- and U-shaped halls get rooms in every wing.
 
 ## State (v1.7)
 

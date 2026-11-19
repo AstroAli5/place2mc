@@ -1,64 +1,69 @@
 {
- "about": "Tags for Franklin & Marshall College that OpenStreetMap does not have yet. Every campus building is red brick (Old Main and Steinman College Center checked on photos; the campus is described as brick architecture), sloped roofs are grey slate (as seen from above), Steinman's flat roof is white, and the Winter Visual Arts Center (2020, after the 2019 laser scan) gets its published form instead of the scan. Heights and roof shapes come from the laser scan (--lidar), not from here. Use: python place2mc.py --osm-file place2mc-data.json --lidar place2mc-data.json --center 40.04966,-76.31705 --radius 768 --tags examples/fandm/fandm-tags.json",
+ "about": "Tags for Franklin & Marshall College that OpenStreetMap does not have yet. Every campus building is red brick with mid-grey slate roofs: checked building by building on Google Earth's 3D view of the campus (May 2024) and on photos of Old Main, Diagnothian Hall, Stager Hall and Steinman College Center. The exceptions: the Lombardo Welcome Center has light walls and a white flat roof, College Row and Steinman have white flat roofs, Steinman's flat roof is white, and the Winter Visual Arts Center (2020, after the 2019 laser scan) gets its published form instead of the scan. Heights and roof shapes come from the laser scan (--lidar), not from here. Use: python place2mc.py --osm-file place2mc-data.json --lidar place2mc-data.json --center 40.04966,-76.31705 --radius 768 --tags examples/fandm/fandm-tags.json place2mc:inside says what each building is used for where its name does not (Old Main: offices; Hensel Hall: the concert hall of the Barshinger Center; Distler House: the bookstore and cafe; Dietz and Meyran: residence halls), so its inside is built to match. Names: ten building names are spelt as on F&M's own campus map, not as on OpenStreetMap (Shadek-Fackenthal Library, Huegel Alumni House, Wohlsen House, Office of Multicultural Affairs, Barshinger Life Sciences & Philosophy Building, Kunkel Aquatic Center, Roschel College House (the former New College House), Restaurants at Ben Franklin (D-Hall; Market Place Dining Hall on the map), Keiper Liberal Arts and the Harris Center for Business, Government & Public Policy).",
  "objects": {
   "way/33327469": {
    "building:material": "brick",
    "note:place2mc": "Old Main: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/33328854": {
    "building:material": "brick",
    "note:place2mc": "Diagnothian Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/33329197": {
    "building:material": "brick",
    "note:place2mc": "Goethean Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/33355079": {
    "building:material": "brick",
    "note:place2mc": "Shadek-Fackethal Library: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33405985": {
    "building:material": "brick",
    "note:place2mc": "North Museum of Nature and Science: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33579271": {
    "building:material": "brick",
    "note:place2mc": "Distler House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "shop"
   },
   "way/33614496": {
    "building:material": "brick",
    "note:place2mc": "Schnader Residence Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33904955": {
    "building:material": "brick",
    "note:place2mc": "Brooks College House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/34064767": {
    "building:material": "brick",
    "note:place2mc": "Harwood Commons: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "dining"
   },
   "way/34213256": {
    "building:material": "brick",
    "note:place2mc": "Huegal Alumni House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/34213884": {
    "building:material": "brick",
    "note:place2mc": "Buchanan House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351667062": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352925691": {
    "building:colour": "#f2f2ee",
@@ -67,440 +72,487 @@
    "height": "15",
    "roof:shape": "flat",
    "place2mc:lidar": "no",
-   "note:place2mc": "Built 2018-2020, after the 2019 laser scan: Steven Holl's raised pavilion, a two-storey box-kite frame of 16-foot translucent glass units on a white-painted concrete base (three storeys); 15 m is worked out from those, not measured."
+   "note:place2mc": "Built 2018-2020, after the 2019 laser scan: Steven Holl's raised pavilion, a two-storey box-kite frame of 16-foot translucent glass units on a white-painted concrete base (three storeys); 15 m is worked out from those, not measured.",
+   "place2mc:inside": "museum"
   },
   "way/33297863": {
    "building:material": "brick",
    "note:place2mc": "Stager Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33354714": {
    "building:material": "brick",
    "note:place2mc": "Keiper Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33406109": {
    "building:material": "brick",
    "roof:colour": "#e8e8e4",
-   "note:place2mc": "Steinman College Center: red brick like the rest of the campus"
+   "note:place2mc": "Steinman College Center: red brick like the rest of the campus",
+   "place2mc:inside": "dining"
   },
   "way/34046061": {
    "building:material": "brick",
    "note:place2mc": "Gerhart House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/34063349": {
    "building:material": "brick",
    "note:place2mc": "Meyran Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "dorm"
   },
   "way/34063468": {
    "building:material": "brick",
    "note:place2mc": "Hensel Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "theatre"
   },
   "way/34213815": {
    "building:material": "brick",
    "note:place2mc": "Dietz Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "dorm"
   },
   "way/139899962": {
    "building:material": "brick",
    "note:place2mc": "Philadelphia Alumni Writers House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139902659": {
    "building:material": "brick",
    "note:place2mc": "Academic Affairs: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/139902660": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139902662": {
    "building:material": "brick",
    "note:place2mc": "Mulitcultural Affairs: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/1351571353": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571354": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571360": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571363": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571367": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571368": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571369": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571370": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571372": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571373": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351571396": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923589": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923590": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923591": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923592": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352985564": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352985588": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353194074": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353194075": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353194076": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353194077": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219735": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219736": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219739": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219740": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219760": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219789": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219790": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219791": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353219792": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221753": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221754": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221755": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221756": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221757": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221758": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353221759": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33614628": {
    "building:material": "brick",
    "note:place2mc": "Barshinginer Life Sciences Building: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33658196": {
    "building:material": "brick",
    "note:place2mc": "Thomas Residence Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/34213369": {
    "building:material": "brick",
    "note:place2mc": "Harris Center for Government: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/34213703": {
    "building:material": "brick",
    "note:place2mc": "Hackman Physical Sciences Laboratory: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139888337": {
    "building:material": "brick",
    "note:place2mc": "New College House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139893377": {
    "building:material": "brick",
    "note:place2mc": "Ware College House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139893378": {
    "building:material": "brick",
    "note:place2mc": "Market Place Dining Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139893379": {
    "building:material": "brick",
    "note:place2mc": "Bonchek College House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139893380": {
    "building:material": "brick",
    "note:place2mc": "Wohlsen Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139893382": {
    "building:material": "brick",
    "note:place2mc": "Adams Auditorium / Kaufman Hall: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/140894167": {
    "building:material": "brick",
    "note:place2mc": "Weis College House: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33298707": {
    "building:material": "brick",
    "note:place2mc": "Mayser Physical Education Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33614417": {
    "building:material": "brick",
    "note:place2mc": "Martin Library of the Sciences: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33614668": {
    "building:material": "brick",
    "note:place2mc": "Robert Roschel Performing Arts Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33645694": {
    "building:material": "brick",
    "note:place2mc": "Alumni Sports and Fitness Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/33658295": {
-   "building:material": "brick",
-   "note:place2mc": "Lombardo Welcome Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "note:place2mc": "Lombardo Welcome Center: light walls and a white flat roof (Google Earth 3D, May 2024)",
+   "roof:colour": "#e8e8e4",
+   "place2mc:inside": "office",
+   "building:colour": "#e4e2da",
+   "roof:shape": "flat"
   },
   "way/84617731": {
    "building:material": "brick",
-   "note:place2mc": "College Row: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "note:place2mc": "College Row: red brick, white flat roofs (Google Earth 3D, May 2024)",
+   "roof:colour": "#e8e8e4"
   },
   "way/115981080": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/115981283": {
    "building:material": "brick",
-   "note:place2mc": "College Row: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "note:place2mc": "College Row: red brick, white flat roofs (Google Earth 3D, May 2024)",
+   "roof:colour": "#e8e8e4"
   },
   "way/139893383": {
    "building:material": "brick",
    "note:place2mc": "Kunkle Aquatic Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/139899961": {
    "building:material": "brick",
    "note:place2mc": "Wholson House (Adminssions): red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/139899963": {
    "building:material": "brick",
    "note:place2mc": "Klehr Center for Jewish Life: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/139900985": {
    "building:material": "brick",
    "note:place2mc": "Joseph International Center: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80",
+   "place2mc:inside": "office"
   },
   "way/139900994": {
    "building:material": "brick",
    "note:place2mc": "Other Room Theatre: red brick like the rest of the campus",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/144290291": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186702906": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186702907": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186702908": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186702909": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186702910": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/186986014": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923567": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923568": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923569": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923570": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923571": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923572": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923573": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923574": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923575": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923583": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923585": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923586": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923587": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352923588": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352949483": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352949484": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1352952109": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1353194079": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/140311914": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/135460314": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
   },
   "way/1351837159": {
    "building:material": "brick",
-   "roof:colour": "#505055"
+   "roof:colour": "#777a80"
+  },
+  "way/1351571366": {
+   "place2mc:inside": "home"
+  }
+ },
+ "replace": {
+  "way/33355079": {
+   "name": "Shadek-Fackenthal Library"
+  },
+  "way/34213256": {
+   "name": "Huegel Alumni House"
+  },
+  "way/139902662": {
+   "name": "Office of Multicultural Affairs"
+  },
+  "way/33614628": {
+   "name": "Barshinger Life Sciences & Philosophy Building"
+  },
+  "way/139888337": {
+   "name": "Roschel College House"
+  },
+  "way/139893383": {
+   "name": "Kunkel Aquatic Center"
+  },
+  "way/139899961": {
+   "name": "Wohlsen House"
+  },
+  "way/139893378": {
+   "name": "Restaurants at Ben Franklin (D-Hall)"
+  },
+  "way/33354714": {
+   "name": "Keiper Liberal Arts"
+  },
+  "way/34213369": {
+   "name": "Harris Center for Business, Government & Public Policy"
   }
  }
 }

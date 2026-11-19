@@ -288,7 +288,11 @@ PITCHED_ROOFS = [block(full) for full, _ in ROOF_MATERIALS]
 ROOF_STAIRS = {block(full): [block(stairs, facing=f, half="bottom", shape="straight") for f in FACINGS]
                for full, stairs in ROOF_MATERIALS + TAG_ROOF_MATERIALS}
 TAG_WALLS = [block(n) for n in ("yellow_terracotta", "light_gray_terracotta")]
-DEEPSLATE_ROOF = block("deepslate_tiles")            # slate grey: measured sloped roofs the map says nothing about
+DEEPSLATE_ROOF = block("deepslate_tiles")
+# inside buildings, by use (all blocks the converter has already)
+BIRCH_PLANKS, QUARTZ, IRON_BLOCK = block("birch_planks"), block("quartz_block"), block("iron_block")
+RED_CONCRETE, BLUE_CONCRETE, BLACK_CONCRETE = block("red_concrete"), block("blue_concrete"), block("black_concrete")
+SPRUCE_PLANKS, DARK_OAK_PLANKS_BLOCK = block("spruce_planks"), block("dark_oak_planks")            # slate grey: measured sloped roofs the map says nothing about
 FLAT_ROOFS = [block(n) for n in ("smooth_stone", "gray_concrete", "light_gray_concrete", "stone_bricks")]
 
 assert len(BLOCKS) < 256, "too many block types for the uint8 volume"
@@ -818,7 +822,8 @@ def roof_from_tags(tags, pitched):
 
 def apply_tag_file(elements, path):
     """A --tags file adds map tags the map does not have yet (they never replace tags the map has):
-    {"objects": {"way/123": {tags}}, "inside": [{"area": "way/456", "tags": {tags}, "min_area": 60}]}. "inside" gives
+    {"objects": {"way/123": {tags}}, "inside": [{"area": "way/456", "tags": {tags}, "min_area": 60}]}; and "replace":
+    {"way/123": {tags}} corrects tags the map has wrong (a misspelt name, say). "inside" gives
     its tags to every building whose middle lies inside that area (and, with min_area, whose footprint is at least
     that many square metres, so sheds and kiosks keep their own size)."""
     rules = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -830,6 +835,11 @@ def apply_tag_file(elements, path):
             tags = el.setdefault("tags", {})
             for k, v in extra.items():
                 tags.setdefault(k, v)
+            changed += 1
+    for key, fixed in (rules.get("replace") or {}).items():   # corrections: these do replace the map's tags
+        el = by_id.get(key)
+        if el is not None:
+            el.setdefault("tags", {}).update(fixed)
             changed += 1
     for rule in rules.get("inside") or []:
         area = by_id.get(rule.get("area"))
@@ -1105,6 +1115,10 @@ def build_map(elements, lat0, lon0, size, climate=None):
     specs = [(0, AIR, AIR, 0, 0, 3, GLASS, AIR, 4, 0, 0, 0)]
     no_lidar = set()
     build_map.no_lidar = no_lidar
+    building_names = {}                                 # building number -> its name, for signs and labels
+    build_map.building_names = building_names
+    building_uses = ["office"]                          # building number -> what it is used for (building_use)
+    build_map.building_uses = building_uses
     # OpenStreetMap's buildings first (relations first, so buildings inside a courtyard are kept), then Overture's
     # (covered walkways before buildings, so a building drawn over one keeps its own walls)
     buildings.sort(key=lambda b: (b[1].get("source:place2mc") == "overture", "place2mc:walkway" not in b[1], not b[4]))
@@ -1171,6 +1185,9 @@ def build_map(elements, lat0, lon0, size, climate=None):
         fill(bimg, bdraw, len(specs) - 1, outers, inners)
         if tags.get("place2mc:lidar") == "no":          # built after the laser scan: use its tags, not the scan
             no_lidar.add(len(specs) - 1)
+        if tags.get("name"):
+            building_names[len(specs) - 1] = tags["name"]
+        building_uses.append(building_use(tags))
 
     counts = {"buildings": len(specs) - 1, "roads": len(roads), "areas": len(areas), "coastlines": len(coast),
               "waterways": len(waterways), "railways": len(rails), "mapped trees": len(trees),
@@ -1770,6 +1787,90 @@ def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_tr
     return placed, rails
 
 
+AREA_KEYS = ("leisure", "amenity", "landuse", "tourism", "historic", "natural", "place", "sport")
+
+
+def place_labels(elements, lat, lon, size, bmap, details, step=2):
+    """Where am I: the names of buildings, streets and named areas (parks, greens, campuses, fields) on a grid of
+    `step`-block cells, for the walk-through to show. Returns (names, uint16 array (3, n, n): building, street, area),
+    0 = no name."""
+    names, index = [""], {}
+
+    def idx(name):
+        if name not in index:
+            index[name] = len(names)
+            names.append(name)
+        return index[name]
+
+    n = -(-size // step)
+    layers = np.zeros((3, n, n), dtype=np.uint16)
+    lut = np.zeros(int(bmap.max()) + 1, dtype=np.uint16)
+    for b, name in (getattr(build_map, "building_names", {}) or {}).items():
+        if b < len(lut):
+            lut[b] = idx(name)
+    layers[0] = lut[bmap][step // 2::step, step // 2::step][:n, :n]
+    img = Image.new("I", (size, size), 0)
+    draw = ImageDraw.Draw(img)
+    for name, width, line in (details or {}).get("streets", []):
+        if name and len(line) >= 2:
+            draw.line([tuple(pt) for pt in line], fill=idx(name), width=max(3, int(width) + 3))
+    layers[1] = np.array(img, dtype=np.int64)[step // 2::step, step // 2::step][:n, :n].astype(np.uint16)
+    m_lat, m_lon = metres_per_degree(lat)
+    px = lambda q: ((q["lon"] - lon) * m_lon + size / 2, (lat - q["lat"]) * m_lat + size / 2)
+    areas = []
+    for el in elements:
+        tags = el.get("tags") or {}
+        if not tags.get("name") or tags.get("building") or tags.get("highway") or not any(k in tags for k in AREA_KEYS):
+            continue
+        if el.get("type") == "way" and el.get("geometry") and len(el["geometry"]) >= 4 \
+                and el["geometry"][0] == el["geometry"][-1]:
+            rings = [[px(q) for q in el["geometry"]]]
+        elif el.get("type") == "relation":
+            rings = [[px(q) for q in m["geometry"]] for m in el.get("members", [])
+                     if m.get("role") != "inner" and m.get("geometry") and len(m["geometry"]) >= 2]
+        else:
+            continue
+        pts = [pt for r in rings for pt in r]
+        if not pts:
+            continue
+        xs, zs = [pt[0] for pt in pts], [pt[1] for pt in pts]
+        if max(xs) < 0 or min(xs) >= size or max(zs) < 0 or min(zs) >= size:
+            continue
+        areas.append(((max(xs) - min(xs)) * (max(zs) - min(zs)), tags["name"], rings))
+    img = Image.new("I", (size, size), 0)
+    draw = ImageDraw.Draw(img)
+    for _, name, rings in sorted(areas, key=lambda a: -a[0]):      # the big ones first, so smaller ones show on top
+        joined = rings if len(rings) == 1 else join_lines(rings)
+        for r in joined:
+            if len(r) >= 3:
+                draw.polygon(r, fill=idx(name))
+    layers[2] = np.array(img, dtype=np.int64)[step // 2::step, step // 2::step][:n, :n].astype(np.uint16)
+    return names, layers
+
+
+def join_lines(lines):
+    """Join the pieces of a relation's outline into closed rings (pieces meet end to end)."""
+    pool = [list(line) for line in lines]
+    out = []
+    while pool:
+        cur = pool.pop(0)
+        grown = True
+        while grown and cur[0] != cur[-1]:
+            grown = False
+            for i, line in enumerate(pool):
+                if line[0] == cur[-1]:
+                    cur += line[1:]
+                elif line[-1] == cur[-1]:
+                    cur += line[::-1][1:]
+                else:
+                    continue
+                pool.pop(i)
+                grown = True
+                break
+        out.append(cur)
+    return out
+
+
 def prepare_lidar(path, lat, lon, size, ground, bmap, specs):
     """load_lidar, then: buildings tagged place2mc:lidar=no (built after the scan) keep their own heights, and the
     buildings the scan found but the map lacks are added. Returns (lidar, how many buildings were added)."""
@@ -1853,6 +1954,9 @@ def add_scanned_buildings(ground, bmap, specs, lidar, min_cells=30):
                       (pick >> 14) % len(DOORS) if sloped else 0, False, False))
         bmap.flat[cells] = len(specs) - 1
         lidar["roof"].flat[cells] = rel.flat[cells]
+        uses = getattr(build_map, "building_uses", None)
+        if uses is not None:
+            uses.append("home" if house else "office")
         added += 1
     return added
 
@@ -1956,6 +2060,212 @@ def clean_trees(trees, min_crown=1.0):
         keep.append(row)
         buckets.setdefault((bx, bz), []).append((x, z, r))
     return np.array(keep).reshape(-1, 4)
+
+
+# what is inside a building: open halls have no floors in between
+HALL_USES = ("gym", "pool", "theatre", "chapel")
+INSIDE_USES = ("library", "dorm", "gym", "pool", "theatre", "chapel", "dining", "museum", "lab", "classroom", "office",
+               "home", "shop")
+
+
+def building_use(tags):
+    """What a building is used for, so its inside can be built to match: place2mc:inside if a tag file says it, else
+    from its tags and name."""
+    t = tags or {}
+    said = (t.get("place2mc:inside") or "").lower()
+    if said in INSIDE_USES:
+        return said
+    name = (t.get("name") or "").lower()
+    b, a, sport = t.get("building", ""), t.get("amenity", ""), t.get("sport", "")
+    words = lambda *ks: any(k in name for k in ks)
+    if a == "library" or words("library"):
+        return "library"
+    if sport == "swimming" or words("aquatic", "natatorium", "swimming"):
+        return "pool"
+    if b in ("dormitory",) or words("college house", "residence hall", "dormitor"):
+        return "dorm"
+    if t.get("leisure") in ("sports_centre", "sports_hall") or b in ("sports_hall", "sports_centre", "gymnasium") \
+            or words("gym", "physical education", "fitness", "arena", "field house", "fieldhouse"):
+        return "gym"
+    if a in ("theatre", "cinema", "arts_centre") or words("theatre", "theater", "performing arts", "auditorium",
+                                                           "concert", "music hall"):
+        return "theatre"
+    if b in ("chapel", "church", "cathedral", "temple", "mosque", "synagogue") or a == "place_of_worship" \
+            or words("chapel", "church"):
+        return "chapel"
+    if a in ("restaurant", "fast_food", "cafe", "food_court", "pub", "bar") or words("dining", "refectory", "cafeteria"):
+        return "dining"
+    if a in ("museum",) or t.get("tourism") in ("museum", "gallery") or words("museum", "gallery"):
+        return "museum"
+    if words("laborator", "science"):
+        return "lab"
+    if b in ("school", "university", "college") or a in ("school", "university", "college"):
+        return "classroom"
+    if b in ("retail", "supermarket", "commercial", "kiosk") or "shop" in t:
+        return "shop"
+    if b in HOUSE_TYPES or b in ("apartments", "residential", "terrace"):
+        return "home"
+    return "office"
+
+
+def furnish_by_use(vol, bmap, uses, inside, floor0, height, storey, top, rng):
+    """Build the inside of each building to match its use: bookshelf rows in a library, bedrooms along a corridor in
+    a dorm, a court with bleachers in a gym, a pool with lanes, seats facing a stage, pews facing an altar, tables in
+    a dining hall, display cases in a museum, lab benches, desks facing a board in classrooms. `uses`: the use of
+    every building number; `top`: the layer of the roof above each cell. Returns how many blocks were placed."""
+    size = bmap.shape[0]
+    layers = vol.shape[0]
+    seat = ROOF_STAIRS[block("spruce_planks")]
+    pew = ROOF_STAIRS[block("dark_oak_planks")]
+    red_seat = ROOF_STAIRS[block("red_nether_bricks")]
+    placed = 0
+    ids = np.unique(bmap[inside])
+    for b in ids:
+        use = uses[b] if b < len(uses) else "office"
+        if use in ("office", "home", "shop"):
+            continue
+        cz, cx = np.nonzero((bmap == b) & inside)
+        if len(cz) < 12:
+            continue
+        z0, x0 = cz.min(), cx.min()
+        long_x = np.ptp(cx) >= np.ptp(cz)
+        u = (cx - x0) if long_x else (cz - z0)                  # along the building
+        v = (cz - z0) if long_x else (cx - x0)                  # across it
+        umax, vmax = u.max(), v.max()
+        f0 = floor0[cz, cx]
+        h = height[cz, cx]
+        st = np.maximum(storey[cz, cx], 3)
+        ceiling = np.minimum(top[cz, cx] - 1, layers - 2)
+        free = lambda y: vol[np.clip(y, 0, layers - 1), cz, cx] == AIR
+
+        def put(mask, y, blk):
+            nonlocal placed
+            m = mask & free(y) & (y < ceiling) & (y >= 0)
+            if np.ndim(blk):
+                vol[y[m], cz[m], cx[m]] = blk[m]
+            else:
+                vol[y[m], cz[m], cx[m]] = blk
+            placed += int(m.sum())
+
+        # toward the higher u (the far end) / lower u, as stair facings, in this building's frame
+        to_far = EAST if long_x else SOUTH
+        to_near = WEST if long_x else NORTH
+        storeys = [(f0 + j * st + (j > 0)) for j in range(int((h // st).max()) + 1)]
+        if use in ("gym", "pool", "theatre", "chapel"):
+            lamp = (u % 6 == 3) & (v % 6 == 3)
+            m = lamp & (ceiling > f0 + 3)
+            vol[ceiling[m], cz[m], cx[m]] = CEILING_LAMP
+            placed += int(m.sum())
+        if use == "gym":                      # a court: light wood, white lines, bleachers along one side
+            vol[(f0 - 1), cz, cx] = BIRCH_PLANKS
+            line = ((u == 2) | (u == umax - 2) | (v == 2) | (v == vmax - 2) | (u == umax // 2)) & \
+                (u >= 2) & (u <= umax - 2) & (v >= 2) & (v <= vmax - 2)
+            vol[(f0 - 1)[line], cz[line], cx[line]] = WHITE_CONCRETE
+            for row in range(3):              # bleachers: three rising rows facing the court
+                m = (v == row) & (u >= 3) & (u <= umax - 3)
+                face = SOUTH if long_x else EAST
+                for up in range(row + 1):
+                    put(m, f0 + up, seat[face] if up == row else BIRCH_PLANKS)
+        elif use == "pool":                   # a pool with lanes, two blocks deep, a stone deck round it
+            basin = (u >= 3) & (u <= umax - 3) & (v >= 3) & (v <= vmax - 3)
+            vol[(f0 - 1)[~basin], cz[~basin], cx[~basin]] = SMOOTH_STONE
+            for d in (1, 2):
+                vol[(f0 - d)[basin], cz[basin], cx[basin]] = WATER
+            bottom = f0 - 3
+            vol[bottom[basin], cz[basin], cx[basin]] = WHITE_CONCRETE
+            lane = basin & ((v - 3) % 3 == 1) & (u >= 4) & (u <= umax - 4)
+            vol[bottom[lane], cz[lane], cx[lane]] = BLUE_CONCRETE
+            placed += int(basin.sum()) * 3
+        elif use in ("theatre", "chapel"):    # a stage or an altar at the far end, seats or pews facing it
+            stage = u >= umax - 4
+            if use == "theatre":
+                put(stage, f0, DARK_OAK_PLANKS_BLOCK)
+            else:
+                put(stage & (u == umax - 2) & (np.abs(v - vmax / 2) <= 1.5), f0, QUARTZ)
+            aisle = np.abs(v - vmax / 2) < 1
+            rows = (u >= 2) & (u <= umax - 7) & (u % 2 == 0) & ~aisle & (v >= 1) & (v <= vmax - 1)
+            put(rows, f0, (red_seat if use == "theatre" else pew)[to_near])
+        elif use == "library":                # shelves in rows across, two high, aisles between; tables by the windows
+            rows = (u % 3 == 1) & (u >= 2) & (u <= umax - 2) & (v >= 3) & (v <= vmax - 3)
+            tables = (v == 1) & (u % 4 == 2)
+            for y in storeys:
+                ok = y + 2 < f0 + h
+                put(rows & ok, y, BOOKSHELF)
+                put(rows & ok, y + 1, BOOKSHELF)
+                put(tables & ok, y, DESK)
+        elif use == "dorm":                   # a corridor down the middle, bedrooms either side with a bed, desk, wardrobe
+            # Rooms line every outside wall, whatever the building's shape (L, U, wings): d = cells from the wall,
+            # measured along the nearer of the two axes; rooms are up to 4 deep, leaving a corridor in the middle.
+            Z, X = cz - z0, cx - x0
+            grid = np.zeros((Z.max() + 1, X.max() + 1), bool)
+            grid[Z, X] = True
+
+            def runs(g):                      # cells to the edge of the building going one way, and the other
+                a, b_ = np.zeros(g.shape, np.int32), np.zeros(g.shape, np.int32)
+                for i in range(g.shape[0]):
+                    a[i] = (a[i - 1] + 1) * g[i] if i else g[i]
+                for i in range(g.shape[0] - 1, -1, -1):
+                    b_[i] = (b_[i + 1] + 1) * g[i] if i < g.shape[0] - 1 else g[i]
+                return np.minimum(a, b_), a + b_ - 1
+            dz, wz = (r[Z, X] for r in runs(grid))
+            dx, wx = (r.T[Z, X] for r in runs(grid.T))
+            across_z = dz <= dx
+            d = np.where(across_z, dz, dx)
+            room_depth = np.minimum(4, (np.where(across_z, wz, wx) - 1) // 2)
+            along = np.where(across_z, X, Z)
+            room = d <= room_depth
+            walls_ = room & (along % 4 == 0)
+            bed_head = room & (d == 1) & (along % 4 == 1)
+            bed_foot = room & (d == 2) & (along % 4 == 1)
+            desk = room & (d == 1) & (along % 4 == 3)
+            wardrobe = room & (d == 1) & (along % 4 == 2)
+            for y in storeys:
+                ok = y + 2 < f0 + h
+                for up in range(3):
+                    put(walls_ & ok & (y + up < f0 + h), y + up, WHITE_CONCRETE)
+                put(bed_head & ok, y, WHITE_CONCRETE)          # the pillow end
+                put(bed_foot & ok, y, RED_CONCRETE)            # the blanket
+                put(desk & ok, y, DESK)
+                put(wardrobe & ok, y, SPRUCE_PLANKS)
+                put(wardrobe & ok, y + 1, SPRUCE_PLANKS)
+        elif use == "dining":                 # tables in rows with chairs, a serving counter along one end
+            table = (u % 3 == 1) & (v % 4 == 2) & (u >= 2) & (u <= umax - 4) & (v >= 2) & (v <= vmax - 2)
+            chair_a = (u % 3 == 1) & (v % 4 == 1) & (u >= 2) & (u <= umax - 4) & (v >= 1)
+            chair_b = (u % 3 == 1) & (v % 4 == 3) & (u >= 2) & (u <= umax - 4) & (v <= vmax - 1)
+            counter = (u == umax - 1) & (v >= 2) & (v <= vmax - 2)
+            across_lo, across_hi = (NORTH, SOUTH) if long_x else (WEST, EAST)
+            for y in storeys[:1]:
+                put(table, y, DESK)
+                put(chair_a, y, seat[across_lo])
+                put(chair_b, y, seat[across_hi])
+                put(counter, y, POLISHED_ANDESITE)
+        elif use == "museum":                 # display cases on pedestals in a grid
+            case = (u % 4 == 2) & (v % 4 == 2) & (u >= 2) & (u <= umax - 2) & (v >= 2) & (v <= vmax - 2)
+            for y in storeys:
+                ok = y + 2 < f0 + h
+                put(case & ok, y, QUARTZ)
+                put(case & ok, y + 1, GLASS)
+        elif use == "lab":                    # long lab benches with stools, fume cupboards along one wall
+            bench = (v % 4 == 2) & (u >= 2) & (u <= umax - 2) & (v <= vmax - 2)
+            stool = (v % 4 == 3) & (u % 2 == 0) & (u >= 2) & (u <= umax - 2) & (v <= vmax - 1)
+            hood = (v == 0) & (u % 3 == 1)
+            across_lo = NORTH if long_x else WEST
+            for y in storeys:
+                ok = y + 2 < f0 + h
+                put(bench & ok, y, POLISHED_ANDESITE)
+                put(stool & ok, y, seat[across_lo])
+                put(hood & ok, y, IRON_BLOCK)
+                put(hood & ok, y + 1, GLASS)
+        elif use == "classroom":              # rooms of desks in rows facing a board
+            board = (u % 9 == 1) & (v % 9 >= 2) & (v % 9 <= 6)
+            desk = (u % 9 >= 3) & (u % 9 <= 7) & (u % 9 % 2 == 1) & (v % 9 >= 2) & (v % 9 <= 6) & (v % 9 != 4)
+            chair = (u % 9 >= 4) & (u % 9 <= 8) & (u % 9 % 2 == 0) & (v % 9 >= 2) & (v % 9 <= 6) & (v % 9 != 4)
+            for y in storeys:
+                ok = y + 2 < f0 + h
+                put(board & ok, y + 1, BLACK_CONCRETE)
+                put(desk & ok, y, DESK)
+                put(chair & ok, y, seat[to_far])
+    return placed
 
 
 def measured_roofs(bmap, g, floor0, rel):
@@ -2247,6 +2557,10 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     shop_front = walls & shop & near_street & ~corner & (along % 4 != 0)
     floor_block = np.where(pitched, HOUSE_FLOOR, SMOOTH_STONE).astype(np.uint8)
     pillar = corner | (along % 4 == 0)
+    uses = list(getattr(build_map, "building_uses", []) or [])
+    uses += ["office"] * (len(specs) - len(uses))
+    hall_px = np.isin(bmap, [i for i, u in enumerate(uses) if u in HALL_USES]) & has_building
+    special_px = np.isin(bmap, [i for i, u in enumerate(uses) if u not in ("office", "home", "shop")]) & has_building
     for k in range(int(height.max())):
         m = walls & (height > k) & (~is_open | pillar)
         if not m.any():
@@ -2262,7 +2576,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
             value[sf] = glass[sf]
         vol[(floor0 + k)[m], zz[m], xx[m]] = value[m]
         if k:                                          # a floor inside, so you see storeys through the windows
-            f = inner & (height > k + 1) & (row == 0)
+            f = inner & (height > k + 1) & (row == 0) & ~hall_px
             vol[(floor0 + k)[f], zz[f], xx[f]] = floor_block[f]
 
     # doors: one per building, in a straight stretch of wall, on the street side when there is one
@@ -2289,6 +2603,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
             spots.append((z, x))
             chosen.append((cell, building))
     doors_placed, doorways = 0, []
+    door_list = list(chosen)                           # (cell, building) of every door, for the name signs later
     for cell, building in chosen:
         z, x = divmod(int(cell), size)
         f = FACINGS[int(facing[z, x])]
@@ -2308,6 +2623,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         z, x = divmod(int(cell), size)
         near_door[max(0, z - 2):z + 3, max(0, x - 2):x + 3] = True
     inside = inner & windows & ~is_open & ~near_door
+    special_inside = inside & special_px              # these get the inside of what they are (furnish_by_use)
+    inside &= ~special_px
     # inner walls: rooms about 8 blocks across, a doorway in the middle of each wall, on every floor
     partition = inside & ((xx % 9 == 0) | (zz % 9 == 0))
     doorway = partition & (((xx % 9 == 0) & (zz % 9 == 4)) | ((zz % 9 == 0) & (xx % 9 == 4)))
@@ -2350,6 +2667,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         m &= vol[np.minimum(room_top, layers - 1), zz, xx] == AIR
         vol[room_top[m], zz[m], xx[m]] = CEILING_LAMP
         furnished += int(m.sum())
+    roof_layer = np.where(measured, mtop, floor0 + height)
+    furnished += furnish_by_use(vol, bmap, uses, special_inside, floor0, height, storey, roof_layer, rng)
 
     # flat roofs: one layer, a raised edge on the taller ones, and rooftop units (a stair head, air conditioning)
     m = has_building & ~pitched & ~measured
@@ -2677,7 +2996,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     vol[g[bush] + 1, z_i, x_i] = np.where(rng.random(len(z_i)) < 0.75, TREES[0][1], TREES[2][1])
     tall = bush & (roll_b < 0.10) & (vol[g + 2, zz, xx] == AIR)
     vol[g[tall] + 2, np.nonzero(tall)[0], np.nonzero(tall)[1]] = TREES[0][1]
-    bed = beside & (roll_b >= 0.42) & (roll_b < 0.72) & (vol[g + 1, zz, xx] == AIR)
+    bed = beside & (roll_b >= 0.42) & (roll_b < (0.50 if lidar is not None else 0.72)) & (vol[g + 1, zz, xx] == AIR)
     vol[g[bed] + 1, np.nonzero(bed)[0], np.nonzero(bed)[1]] = np.array(FLOWERS, dtype=np.uint8)[kind_b[bed]]
     landscaping = int(bush.sum() + bed.sum())
 
@@ -2687,6 +3006,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     open_grass = (vol[g, zz, xx] == GRASS) & (vol[g + 1, zz, xx] == AIR) & ~has_building
     rates = {S_GRASS: (0.22, 0.04, 0.0, 0.02), S_PARK: (0.10, 0.01, 0.0, 0.025), S_LAWN: (0.05, 0.0, 0.0, 0.01),
              S_FOREST: (0.16, 0.03, 0.07, 0.006), S_INDUSTRIAL: (0.10, 0.02, 0.0, 0.004)}  # grass, tall grass, fern, flowers
+    if lidar is not None:            # a measured place: mown lawns and parks, as they are, not a wildflower meadow
+        rates.update({S_GRASS: (0.10, 0.01, 0.0, 0.003), S_PARK: (0.04, 0.0, 0.0, 0.002), S_LAWN: (0.03, 0.0, 0.0, 0.0)})
     plants = 0
     for cls, (short, tall, fern, flower) in rates.items():
         here = open_grass & (ground == cls)
@@ -2739,6 +3060,34 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         signs.append((y + 1, z, x, rotation, sign_lines(name), "white"))
 
     street_signs = len(signs)
+    # a sign with the building's name in front of its main door, facing the way in, as campuses and towns have them
+    names = getattr(build_map, "building_names", {}) or {}
+    named_signs = 0
+    done = set()
+    for cell, building in door_list:
+        name = names.get(int(building))
+        if not name or building in done:
+            continue
+        z, x = divmod(int(cell), size)
+        f = int(facing[z, x])
+        dz, dx = ((1, 0), (-1, 0), (0, 1), (0, -1))[f]            # out of the door
+        sz, sx = (-dx, dz)                                        # to the side, off the path into the door
+        for out_step, side in ((2, 2), (2, -2), (3, 2), (3, -2), (2, 3), (2, -3)):
+            tz, tx = z + dz * out_step + sz * side, x + dx * out_step + sx * side
+            if not (2 <= tx < size - 2 and 2 <= tz < size - 2) or keep_off[tz, tx] or has_building[tz, tx]:
+                continue
+            y = int(g[tz, tx]) + 1
+            if y + 2 >= vol.shape[0] or vol[y, tz, tx] not in low or vol[y + 1, tz, tx] not in low:
+                continue
+            rotation = facing_rotation(dx, dz)                    # the text faces people coming to the door
+            vol[y, tz, tx] = SIGNS[rotation]
+            if vol[y + 1, tz, tx] in low:
+                vol[y + 1, tz, tx] = AIR
+            signs.append((y, tz, tx, rotation, sign_lines(name), "white"))
+            keep_off[tz, tx] = True
+            done.add(building)
+            named_signs += 1
+            break
     # road signs, bus stops, hydrants and bins from the map
     left = details.get("left_traffic", False)
     streets = details.get("streets", [])
@@ -2841,7 +3190,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
                           "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals,
                           "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails,
                           "seagrass": water_life["seagrass"], "kelp stalks": water_life["kelp"],
-                          "street-name signs": street_signs, "street lamps from the map": real_lamps, **placed}
+                          "street-name signs": street_signs, "building name signs": named_signs, "street lamps from the map": real_lamps, **placed}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -3344,8 +3693,10 @@ def main():
         credit = "Map data © OpenStreetMap contributors" + (
             ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "") + (
             " · Heights: USGS 3DEP LiDAR" if lidar is not None else "")
+        labels = place_labels(elements, lat, lon, size, bmap, build_map.details)
         walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures,
-                               credit=credit, latlon=(lat, lon), signs=getattr(build_volume, "signs", ()), spawn_yaw=spawn_yaw)
+                               credit=credit, latlon=(lat, lon), signs=getattr(build_volume, "signs", ()), spawn_yaw=spawn_yaw,
+                               labels=labels)
         print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
         print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):
