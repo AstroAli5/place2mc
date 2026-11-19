@@ -987,6 +987,7 @@ async function main() {
   }
   requestAnimationFrame(frame);
   window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt,      // for tests
+                    buildAll: () => { let n = 0; while (buildSome(2000)) n++; return n; },
                     setTime: i => { timeIndex = i; shadowDirty = true; }, setShaders: i => { shaderLevel = i; shadowDirty = true; } };
 }
 main().catch(e => { $("title").textContent = "Something went wrong"; setStatus(String(e && e.message || e)); console.error(e); });

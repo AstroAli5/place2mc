@@ -87,6 +87,15 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.2)
+
+v1.2: Ali: "edit the GitHub page, cool pictures, simulations, make it so good". README redone: header with badges,
+a day-to-night time-lapse GIF of ALA (mcrender, Look(hour=...)), a fly-over GIF of the walk-through
+(tests/walk_flyover.py; window.__walk.buildAll() builds every chunk in view first), the map next to the world from
+above, a mermaid diagram, and a live link to ALA's walk-through through raw.githack.com (serves the HTML from the
+repo). The repo's About description and topics cannot be changed from the cloud workspace (the proxy refuses
+repository settings), so Ali sets them himself; GitHub Pages likewise.
+
 ## State (v1.1)
 
 v1.1: Ali: "do it" (sun and shadows in the pictures too) + "make it look so cool". mcrender.Look ports the

@@ -1,27 +1,81 @@
-# place2mc
+<h1 align="center">place2mc</h1>
 
-Pick any real place on a map, press Convert, and walk around it like you are in Minecraft. place2mc downloads the
-streets, buildings, water, parks and trees from OpenStreetMap and the hills from public elevation data, and builds
-them at 1 block = 1 metre. You get a walk-through that opens in any browser (no Minecraft needed), a ready-to-play
-Java world, and a Bedrock `.mcworld` file.
+<p align="center">
+  <b>Turn any real place on Earth into Minecraft.</b><br>
+  Pick a spot on a map, press Convert, and walk around it: in Minecraft Java, in Bedrock, or right in your browser.
+</p>
 
-![A street at African Leadership Academy, Johannesburg, in the afternoon sun](docs/street.jpg)
+<p align="center">
+  <img alt="Java 1.21.4+" src="https://img.shields.io/badge/Minecraft%20Java-1.21.4%2B-62b47a">
+  <img alt="Bedrock 1.21.120+" src="https://img.shields.io/badge/Bedrock-1.21.120%2B-3c8527">
+  <img alt="Python 3" src="https://img.shields.io/badge/Python-3-3776ab">
+  <img alt="Walk-through in any browser" src="https://img.shields.io/badge/walk--through-any%20browser-e8833a">
+  <img alt="Map data OpenStreetMap" src="https://img.shields.io/badge/map-OpenStreetMap%20%2B%20Overture-7ebc6f">
+</p>
 
-The same street at four times of day. The sun stands where it really does over that place on that date:
+<p align="center">
+  <img src="docs/timelapse.gif" width="760" alt="A day at African Leadership Academy, from sunrise to night, in Minecraft">
+  <br><sub>A day at African Leadership Academy in Johannesburg, 06:00 to 21:00. The sun moves the way it really does over
+  the school in November; shadows, sunset and the lit-up windows at night come from place2mc's own renderer.</sub>
+</p>
 
-![Morning, afternoon, sunset and night](docs/times-of-day.jpg)
+<p align="center">
+  <a href="https://raw.githack.com/AstroAli5/place2mc/main/examples/ala/Walk%20around%20ALA.html"><b>▶ Walk around ALA in your browser</b></a> (no install, no Minecraft)
+  &nbsp;·&nbsp; <a href="#use-it"><b>Make your own place</b></a>
+  &nbsp;·&nbsp; <a href="#how-it-works"><b>How it works</b></a>
+</p>
+
+## Walk around it
+
+Every conversion also makes a page you open in any browser, on a computer or a phone. Walk with W A S D and the
+mouse, jump, sprint, fly (F), go 2, 4 or 8 times faster (1-4), change the time of day (T) and switch the shaders (G).
+
+<p align="center"><img src="docs/flyover.gif" width="640" alt="Flying round the ALA campus in the browser walk-through"></p>
+
+## The real sun
+
+The sun stands where it really does over that place on the day you look at it: east in the morning, north at noon
+south of the tropics, low in the south in a London winter. Buildings and trees cast shadows, water mirrors the sky,
+and after dark the street lamps and the rooms behind the windows light up.
+
+![The same ALA street in the morning, afternoon, at sunset and at night](docs/times-of-day.jpg)
 
 | | |
 |---|---|
-| ![Sunset over the sea at Monaco](docs/sunset-sea.jpg) | ![Night: street lamps and lit windows](docs/night.jpg) |
-| ![Rooftops of ALA in the afternoon](docs/rooftops.jpg) | ![The same rooftops at sunset](docs/sunset-rooftops.jpg) |
-| ![A car park with parked cars](docs/car-park.jpg) | ![Fences, brick and garden walls, rails, a house](docs/fences-walls-rails.jpg) |
+| ![Sunset over the sea at Monaco](docs/sunset-sea.jpg) | ![Monaco at night: lit windows and street lamps](docs/monaco-night.jpg) |
+| ![Monaco from the sea in the afternoon](docs/monaco-afternoon.jpg) | ![ALA's rooftops at sunset](docs/sunset-rooftops.jpg) |
+| ![A car park with parked cars](docs/car-park.jpg) | ![Fences, brick and garden walls, rails and a house](docs/fences-walls-rails.jpg) |
 
-These pictures are made by place2mc itself (`mcrender.py`, plain Python): sunlight with shadows, the sky, lanterns
-at night and water that mirrors the sky, like a Minecraft shader pack. `--plain-pictures` draws them the way the
-game itself draws a world at noon instead. On a computer with Minecraft Java installed, the pictures and the
-walk-through use the textures of your own game; otherwise they use the Minecraft-style Pixel Perfection CE textures
-that come with place2mc.
+## How it works
+
+Everything sits where it is in the real place, at real size: 1 block is 1 metre.
+
+![Left: the map of ALA. Right: the same square in Minecraft, from above](docs/map-to-world.jpg)
+
+```mermaid
+flowchart LR
+  OSM["OpenStreetMap<br>streets, buildings, water, trees"] --> MAP
+  OV["Overture Maps<br>buildings the map lacks, land cover"] --> MAP
+  DEM["Elevation tiles<br>real hills"] --> MAP
+  TAGS["Your tags (optional)<br>colours, materials, floors"] --> MAP
+  MAP["Surface map<br>1 block = 1 m"] --> BLOCKS["Blocks<br>buildings, rooms, roads, lamps, trees"]
+  BLOCKS --> JAVA["Java world"]
+  BLOCKS --> BED["Bedrock .mcworld"]
+  BLOCKS --> WALK["Walk-through page"]
+  BLOCKS --> PICS["Pictures with the real sun"]
+```
+
+What gets built, besides streets, buildings and hills:
+
+- **Buildings** at their mapped height and in their mapped colours and materials (brick, plaster, concrete, wood,
+  green or red metal roofs), with windows, doors, floors, sloped roofs with eaves or flat roofs with rooftop units
+- **Rooms** behind the windows: inner walls with doorways, bookshelves, desks, chairs and hanging lanterns on every floor
+- **Streets** at their real width, with sidewalks, centre lines, zebra crossings, traffic lights, street lamps and
+  half slabs where a street climbs
+- **Car parks** with bay lines and parked cars; shelters and covered walkways on pillars
+- **Fences, garden walls, face-brick walls and hedges**, railway and tram tracks, benches
+- **Nature**: parks, forests, lawns, street trees and mapped trees, bushes and flowers by the walls, rivers, lakes
+  and the sea
 
 ## Use it
 
@@ -61,13 +115,6 @@ To make a place look more like itself, give it the colours and materials the map
 OpenStreetMap (`building:colour`, `building:material`, `roof:colour`, `roof:material`, `roof:shape`,
 `building:levels`) are used automatically.
 
-What gets built besides streets, buildings and hills: rooms divided by inner walls with doorways, with bookshelves,
-desks, chairs and hanging lanterns on every floor (you see them through the windows, lit up at night), doors, car parks with bay lines and parked cars, traffic lights,
-shelters and covered walkways on pillars, zebra crossings, rails, fences, garden walls, face-brick walls
-(`barrier=wall` with `material=brick`), hedges, benches, street lamps (on the verge where a street has no sidewalk),
-trees, bushes and flowers. Heights come from the map (`height`, `building:levels`, Overture); when it says nothing,
-buildings get one to three floors depending on what they are and how big.
-
 Pictures: `--screenshots` draws the result in the afternoon sun with shadows, plus the rooftops at sunset and a
 street at night. `--picture-time morning|midday|afternoon|sunset|night` picks the time, `--plain-pictures` the
 game's plain noon light (faster).
@@ -77,8 +124,9 @@ Other options: `--osm-file map.osm` (work offline from a saved map), `--flat` (n
 
 ## Example
 
-[`examples/ala`](examples/ala): African Leadership Academy in Johannesburg, with a walk-through you can download
-and open.
+[`examples/ala`](examples/ala): African Leadership Academy in Johannesburg. [Walk around it in your browser](https://raw.githack.com/AstroAli5/place2mc/main/examples/ala/Walk%20around%20ALA.html),
+or download `Walk around ALA.html` and open it. Its tag file shows how to make a place look more like itself
+(the school's red face-brick walls and dark green metal roofs, from campus photos and Street View).
 
 ## Where the map is thin
 
@@ -87,17 +135,6 @@ buildings on it). So place2mc also reads **Overture Maps**, a free worldwide map
 aerial imagery (Microsoft, Google) and Esri's community maps, with heights, floors and roof details where known,
 and **ESA WorldCover** land cover (forest, shrubs, crops, bare ground) seen from space. It only adds what
 OpenStreetMap does not have, and never replaces it. Turn it off with `--no-overture`.
-
-## What it builds
-
-- Hills from elevation data, with dirt over stone, and the sea, lakes and rivers at their real places
-- Buildings at their mapped height (or a guess from their type and size), in the colours and materials the map
-  gives (brick, plaster, concrete, wood, green or red metal roofs, ...): walls with windows and floors
-  inside, shop windows on the street side, doors, flat roofs with rooftop units, sloped roofs with eaves
-- Roads at their real width with sidewalks, centre lines, zebra crossings, street lamps, and half slabs where
-  a street climbs
-- Fences, garden walls and hedges, railway and tram tracks, benches
-- Parks, forests, lawns, street trees and mapped trees, grass and flowers, and the matching biomes
 
 ## How it was checked, and what was not
 

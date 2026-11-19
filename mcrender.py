@@ -784,10 +784,11 @@ class Look:
     """The light at one place at one time of day: the real sun's direction there on that date, and the colours of
     the sunlight, the shade and the sky. The same numbers as the walk-through's shaders."""
 
-    def __init__(self, lat=45.0, time="afternoon", day_of_year=None):
+    def __init__(self, lat=45.0, time="afternoon", day_of_year=None, hour=None):
+        """time: one of TIMES; or give hour (solar time, 0-24) for any moment, as in a time-lapse."""
         self.lat, self.time = lat, time
         self.day_of_year = day_of_year or datetime.date.today().timetuple().tm_yday
-        hour = TIMES[time]
+        hour = TIMES[time] if hour is None else hour
         if hour is None:                              # sunset: the sun 3 degrees above the horizon in the evening
             hour = next((hr for hr in np.arange(12, 22, 0.02) if self.sun(hr)[1] < math.sin(math.radians(3))), 18.0)
         self.hour = float(hour)
