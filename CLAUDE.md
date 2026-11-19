@@ -105,6 +105,11 @@ chunk at once and its 8 neighbours via `stale`; kept in localStorage as block na
 Speed keys moved from 1-4 to - and = (1-9 are the hotbar, as in the game). Map credit moved to the top right.
 graphify (pip install graphifyy; `graphify update DIR`, tree-sitter, no LLM for code) made docs/code-map.md; on
 Arnis's src it finds 23,104 nodes / 63,765 edges (useful to find how Arnis does something).
+README redone for v1.7 ("put all of this on GitHub, make it look cool, every detail, the Spotify thing"): picture
+gallery, What's inside, Controls table, physics table, docs/creative.gif (a house going up block by block, made
+in ALA's walk-through), Sound and Spotify steps, Real details, What's new table. docs/social-preview.png
+(1280x640) is for Settings > Social preview; the About description, website and topics still cannot be set from
+the workspace (proxy: "Repository settings writes are not permitted"), and Chrome was offline, so Ali sets them.
 
 ## State (v1.6)
 
