@@ -89,6 +89,32 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.8)
+
+v1.8: Ali: "try on Franklin & Marshall College, every detail, no mistakes in heights, search every website" (he will
+send it to F&M). Measured heights from USGS 3DEP LiDAR (public domain): app/lidar.js reads the Entwine Point Tiles on
+usgs-lidar-public (laz-perf, Apache-2.0, for LAZ) in a browser and keeps: the ground (class 2/9 minimum, gaps filled,
+every 2 m), the roof above the ground in every 1 m cell of every mapped outline plus one ring (highest lone echo, else
+highest first echo), patches of hard roof the map lacks (>= 30 m2, >= 3 m, >= 75% lone echoes; >= 4 m2 when touching
+an outline: towers/bays), and tree tops (local maxima of the canopy, crown = where it falls below 45%). The workspace
+cannot reach the data or receive it from Chrome (the extension blocks base64 output), so app/fetch-template.html +
+tools/make_fetch_page.py make one page (decoder inside) that saves place2mc-data.json (format place2mc-browser-1: map
+rows + lidar); it ran in Ali's browser through raw.githack.com and the file came back via the device bridge
+(Downloads). place2mc: --lidar FILE (load_lidar, prepare_lidar: place2mc:lidar=no tag skips buildings built after the
+scan, add_scanned_buildings adds/attaches the map's missing buildings), ground from the scan (blur 1), measured_roofs
+(clean_roof_cells: thin/speckled high cells = branches -> gaps, compact high blocks = towers kept unsmoothed, 3x3 median
+elsewhere; gaps from side neighbours), draw_measured_roofs (walls where a roof drops >= 3, roof blocks on gentle
+steps, stairs at the foot of each 1-block step), measured trees only (clean_trees: crown >= 1 m and >= 8% of height,
+lower tops inside a taller crown dropped; trunk under the top, conifer if crown < 13% of height and >= 8 m).
+tests/check_lidar.py, tests/lidar_js_test.mjs, tests/fetch_page_test.py; verify_world/verify_bedrock take LIDAR=file.
+F&M (examples/fandm): centre 40.04966,-76.31705 radius 768 (the campus relation 7735060 fits with the edge ramp
+outside it), 2019 scan PA_Northcentral_B1_2019 (11.4 M points in the square, classes 1/2 only), 866 mapped + ~500
+scanned buildings, ~12,000 trees; 93.5% of roof cells of the 86 named buildings within 1 m of the scan (0.6 m mean);
+Old Main's tower 36 blocks (scan 36.0 m, archives 121 ft = 36.9 m). Tags: every campus building brick (Old Main and
+Steinman checked on photos), sloped roofs slate #505055 (-> deepslate tiles; #56575c gave dark prismarine), Steinman
+white flat roof, Winter Visual Arts Center (2020, after the scan) 3 storeys 15 m white/glass from published facts.
+Fixed: inland water with hills crashed (real[sea].max() on no sea); world names keep & ' ( ).
+
 ## State (v1.7)
 
 v1.7: Ali: "reverse engineer whole Minecraft" + github.com/Graphify-Labs/graphify. Read as: learn how the game behaves

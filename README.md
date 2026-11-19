@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.7" src="https://img.shields.io/badge/version-1.7-ff8a3d">
+  <img alt="Version 1.8" src="https://img.shields.io/badge/version-1.8-ff8a3d">
   <img alt="Java 1.21.4+" src="https://img.shields.io/badge/Minecraft%20Java-1.21.4%2B-62b47a">
   <img alt="Bedrock 1.21.120+" src="https://img.shields.io/badge/Bedrock-1.21.120%2B-3c8527">
   <img alt="Walk-through in any browser" src="https://img.shields.io/badge/walk--through-any%20browser-e8833a">
@@ -184,6 +184,22 @@ shelter with a bench. Fire hydrants, litter bins and street lamps stand where th
 
 ![The fences, brick and garden walls, rails and a house on the test map](docs/fences-walls-rails.jpg)
 
+## Real heights from laser scans (anywhere in the US)
+
+In the US, place2mc can use the government's laser scans of the land (USGS 3DEP LiDAR, public domain): an aircraft
+measured the ground, every roof and every tree to a few centimetres. Every 1 m of every roof then sits at its measured
+height, with its slopes, gables, towers, cupolas and chimneys; every tree stands where it really is, as tall and as wide
+as it really is; buildings the map is missing are added from the scan; and the ground is the scan's bare earth.
+
+1. Make a page for your place: `python tools/make_fetch_page.py LAT LON SIZE EPT_URL "Get my data.html"` (the scan's
+   address is in [the USGS scans list](https://github.com/hobuinc/usgs-lidar)), open it in a browser and press Start.
+   It saves `place2mc-data.json`: the map and the scan, boiled down (about 1.5 MB for 1.5 km x 1.5 km).
+2. `python place2mc.py --osm-file place2mc-data.json --lidar place2mc-data.json --center LAT,LON --radius SIZE/2`
+
+Example: [Franklin & Marshall College](examples/fandm), Lancaster, Pennsylvania, from the 2019 scan (11.4 million laser
+points). On the 86 named buildings, 93.5% of the roof is within 1 m of the scan; Old Main's tower comes out 36 blocks
+tall (the scan says 36.0 m, the college archives 121 ft, 36.9 m).
+
 ## Any place on Earth
 
 Every place gets the climate it really has, from a world climate map: the biome, the colour of the grass and the
@@ -282,6 +298,7 @@ or download `Walk around ALA.html` and open it. Its tag file shows how to make a
 
 | Version | |
 |---|---|
+| **1.8** | Real heights from laser scans in the US: every roof, tower and tree as measured; Franklin & Marshall College as the example |
 | **1.7** | The walk-through moves exactly like the game (8 measurements, all match); creative mode to break and place blocks, with a hotbar, kept in your browser; a map of the code made with [graphify](https://github.com/Graphify-Labs/graphify) |
 | **1.6** | Spotify in the walk-through; stop and give-way signs on the right side of the road for each country, bus stops with shelters, fire hydrants, bins, street lamps where the real ones are |
 | **1.5** | Street-name signs with the real names (Java, Bedrock, walk-through); "now": the real sun this minute |

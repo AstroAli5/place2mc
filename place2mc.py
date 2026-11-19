@@ -35,6 +35,7 @@ world anyway. Map data (c) OpenStreetMap contributors, ODbL. Elevation data:
 AWS Terrain Tiles (Mapzen / Tilezen and their sources).
 """
 import argparse
+import base64
 import bz2
 import gzip
 import io
@@ -55,7 +56,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.7"
+VERSION = "1.8"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -287,6 +288,7 @@ PITCHED_ROOFS = [block(full) for full, _ in ROOF_MATERIALS]
 ROOF_STAIRS = {block(full): [block(stairs, facing=f, half="bottom", shape="straight") for f in FACINGS]
                for full, stairs in ROOF_MATERIALS + TAG_ROOF_MATERIALS}
 TAG_WALLS = [block(n) for n in ("yellow_terracotta", "light_gray_terracotta")]
+DEEPSLATE_ROOF = block("deepslate_tiles")            # slate grey: measured sloped roofs the map says nothing about
 FLAT_ROOFS = [block(n) for n in ("smooth_stone", "gray_concrete", "light_gray_concrete", "stone_bricks")]
 
 assert len(BLOCKS) < 256, "too many block types for the uint8 volume"
@@ -534,11 +536,12 @@ def box_blur(values, r):
     return (c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / float(k * k)
 
 
-def terrain_layers(elev, ground):
+def terrain_layers(elev, ground, blur=2):
     """Metres -> the layer of the top block of every column, and the layer of the sea surface.
     The lowest land sits at y=-61 like a Superflat world. With a coast, sea level is y=-61 and land below sea
     level is raised to it, so the sea lies level with the flat world around the build and cannot spill out."""
-    elev = box_blur(box_blur(elev, 2), 2)              # smooth out noise in the data, roughly 9 m across
+    if blur:                                           # smooth out noise in the data (roughly 9 m across for tiles)
+        elev = box_blur(box_blur(elev, blur), blur)
     sea = ground == S_SEA
     land = ~sea
     lowest = float(elev[land].min()) if land.any() else 0.0
@@ -555,14 +558,19 @@ def terrain_layers(elev, ground):
     return layers, sea_level, depth
 
 
-def make_terrain(lat, lon, size, ground, cache_dir=None, fetch=fetch_tile):
-    """(layers, sea_level) for hills, or None for flat ground if the elevation data cannot be had."""
-    try:
-        elev = elevation_grid(lat, lon, size, cache_dir, fetch=fetch)
-    except Exception as exc:
-        print(f"Could not get elevation data ({exc}); building on flat ground instead.")
-        return None
-    layers, sea_level, depth = terrain_layers(elev, ground)
+def make_terrain(lat, lon, size, ground, cache_dir=None, fetch=fetch_tile, elev=None):
+    """(layers, sea_level) for hills, or None for flat ground if the elevation data cannot be had.
+    elev: the ground in metres for every block column (from a laser scan), instead of the elevation tiles."""
+    blur = 2
+    if elev is not None:
+        blur = 1                                       # 1 m laser-scan ground: only take the edge off single cells
+    else:
+        try:
+            elev = elevation_grid(lat, lon, size, cache_dir, fetch=fetch)
+        except Exception as exc:
+            print(f"Could not get elevation data ({exc}); building on flat ground instead.")
+            return None
+    layers, sea_level, depth = terrain_layers(elev, ground, blur=blur)
     # ramp the outer edge down to the flat world around the build, so it ends in a slope rather than a cliff
     band = max(1, min(48, size // 8))
     z, x = np.indices(layers.shape)
@@ -584,13 +592,83 @@ def open_maybe_compressed(path):
     return open(path, "rb")
 
 
+def load_lidar(path, lat0, lon0, size):
+    """Read a LiDAR summary made by app/lidar.js (USGS 3DEP laser scans): the bare ground, the height of the roof above
+    the ground in every 1 m cell of a building footprint, and every tree (x, z, height, crown radius, in blocks and
+    metres). It must be made for the same centre and size as this run."""
+    data = json.loads(Path(path).read_text())
+    if data.get("format") == "place2mc-browser-1":           # the map and the scan in one file
+        data = data["lidar"]
+    if abs(data["lat0"] - lat0) > 1e-6 or abs(data["lon0"] - lon0) > 1e-6 or data["size"] != size:
+        sys.exit(f"{path} was made for {data['lat0']},{data['lon0']} and {data['size']} blocks, not "
+                 f"{lat0},{lon0} and {size}: use --center {data['lat0']},{data['lon0']} --radius {data['size'] // 2}.")
+
+    def unpack(text, dtype):
+        return np.frombuffer(gzip.decompress(base64.b64decode(text)), dtype=dtype)
+
+    d = data["dtm"]
+    n, step = d["n"], d["step"]
+    coarse = np.cumsum(unpack(d["rowDiffInt16"], "<i2").reshape(n, n).astype(np.int64), axis=1) * d["unit"] + d["low"]
+    # back to 1 m cells: bilinear between the centres of the coarse cells
+    pos = (np.arange(size) + 0.5) / step - 0.5
+    i0 = np.clip(np.floor(pos).astype(int), 0, n - 2)
+    f = np.clip(pos - i0, 0, 1)
+    rows = coarse[i0] * (1 - f)[:, None] + coarse[i0 + 1] * f[:, None]
+    dtm = rows[:, i0] * (1 - f)[None, :] + rows[:, i0 + 1] * f[None, :]
+    r = data["roofs"]
+    runs = unpack(r["runsUint32"], "<u4")
+    codes = unpack(r["codesUint8"], np.uint8)
+    inside = np.repeat(np.arange(len(runs)) % 2 == 1, runs.astype(np.int64))
+    if inside.size != size * size or inside.sum() != codes.size:
+        sys.exit(f"{path} is damaged (its building cells do not add up).")
+    roof = np.full(size * size, np.nan)
+    roof[inside] = np.where(codes == 255, np.nan, codes * r["step"] + r["offset"])
+    t = data["trees"]
+    trees = unpack(t["xzhrInt16"], "<i2").reshape(-1, 4).astype(float) * t["unit"] if t["count"] else np.zeros((0, 4))
+    trees = clean_trees(trees)
+    unmapped = np.full(size * size, np.nan)
+    u = data.get("unmapped")
+    if u and u.get("cells"):
+        u_runs = unpack(u["runsUint32"], "<u4")
+        u_codes = unpack(u["codesUint8"], np.uint8)
+        u_in = np.repeat(np.arange(len(u_runs)) % 2 == 1, u_runs.astype(np.int64))
+        if u_in.size == size * size and u_in.sum() == u_codes.size:
+            unmapped[u_in] = np.where(u_codes == 255, np.nan, u_codes * u["step"] + u["offset"])
+    return {"dtm": dtm, "roof": roof.reshape(size, size), "trees": trees, "points": data.get("points"),
+            "source": data.get("ept", ""), "unmapped": unmapped.reshape(size, size)}
+
+
+def browser_elements(data):
+    """The map in a file made by app/fetch-template.html: rows of [kind, id, tags, points] with the points as
+    differences in 1e-7 degrees from the centre, back to Overpass's JSON (with geometry)."""
+    def decode(flat):
+        pts, lat, lon = [], data["osmBase"][0], data["osmBase"][1]
+        for i in range(0, len(flat), 2):
+            lat, lon = lat + flat[i], lon + flat[i + 1]
+            pts.append({"lat": lat / 1e7, "lon": lon / 1e7})
+        return pts
+
+    elements = []
+    for kind, osm_id, tags, points in data["rows"]:
+        if kind == "n":
+            p = decode(points)[0]
+            elements.append({"type": "node", "id": osm_id, "lat": p["lat"], "lon": p["lon"], "tags": tags})
+        elif kind == "w":
+            elements.append({"type": "way", "id": osm_id, "tags": tags, "geometry": decode(points)})
+        else:
+            elements.append({"type": "relation", "id": osm_id, "tags": tags,
+                             "members": [{"type": "way", "role": role, "geometry": decode(g)} for role, g in points]})
+    return elements
+
+
 def load_osm_file(path):
     """Read a saved Overpass .json file or an .osm XML export. Returns (elements, bounds or None)."""
     with open_maybe_compressed(path) as fh:
         head = fh.read(64).lstrip()
     if head.startswith(b"{"):
         with open_maybe_compressed(path) as fh:
-            elements = json.loads(fh.read().decode("utf-8"))["elements"]
+            data = json.loads(fh.read().decode("utf-8"))
+        elements = browser_elements(data) if data.get("format") == "place2mc-browser-1" else data["elements"]
         pts = [(p["lat"], p["lon"]) for el in elements for p in el.get("geometry") or [] if p]
         bounds = (min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)) if pts else None
         return elements, bounds
@@ -1025,6 +1103,8 @@ def build_map(elements, lat0, lon0, size, climate=None):
     # per building: height, wall, roof, pitched roof, windows, floor height, glass, base/trim block, window spacing
     # ... door kind (index into DOORS), shop windows on the ground floor
     specs = [(0, AIR, AIR, 0, 0, 3, GLASS, AIR, 4, 0, 0, 0)]
+    no_lidar = set()
+    build_map.no_lidar = no_lidar
     # OpenStreetMap's buildings first (relations first, so buildings inside a courtyard are kept), then Overture's
     # (covered walkways before buildings, so a building drawn over one keeps its own walls)
     buildings.sort(key=lambda b: (b[1].get("source:place2mc") == "overture", "place2mc:walkway" not in b[1], not b[4]))
@@ -1089,6 +1169,8 @@ def build_map(elements, lat0, lon0, size, climate=None):
         specs.append((height, wall, roofs[(pick >> 4) % len(roofs)], pitched, windows, storey, glass, base, spacing,
                       door, shop, btype in ("roof", "carport")))
         fill(bimg, bdraw, len(specs) - 1, outers, inners)
+        if tags.get("place2mc:lidar") == "no":          # built after the laser scan: use its tags, not the scan
+            no_lidar.add(len(specs) - 1)
 
     counts = {"buildings": len(specs) - 1, "roads": len(roads), "areas": len(areas), "coastlines": len(coast),
               "waterways": len(waterways), "railways": len(rails), "mapped trees": len(trees),
@@ -1688,10 +1770,313 @@ def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_tr
     return placed, rails
 
 
-def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None, deep_water=True):
+def prepare_lidar(path, lat, lon, size, ground, bmap, specs):
+    """load_lidar, then: buildings tagged place2mc:lidar=no (built after the scan) keep their own heights, and the
+    buildings the scan found but the map lacks are added. Returns (lidar, how many buildings were added)."""
+    lidar = load_lidar(path, lat, lon, size)
+    skip = list(getattr(build_map, "no_lidar", ()))
+    if skip:
+        lidar["roof"][np.isin(bmap, skip)] = np.nan
+        lidar["unmapped"][np.isin(bmap, skip)] = np.nan
+    return lidar, add_scanned_buildings(ground, bmap, specs, lidar)
+
+
+def add_scanned_buildings(ground, bmap, specs, lidar, min_cells=30):
+    """Buildings the laser scan found but the map does not have (app/lidar.js: patches of hard roof at least 3 m up).
+    A patch touching a mapped building is part of it (a tower, bay or porch its outline leaves out) and joins it. Any
+    other patch becomes a building with the measured roof; patches mostly over roads, rails or water (lorries, bridges)
+    are left out. Returns how many buildings were added; bmap, specs and lidar["roof"] are changed in place."""
+    rel = lidar.get("unmapped")
+    if rel is None:
+        return 0
+    size = bmap.shape[0]
+    cand = np.isfinite(rel) & (bmap == 0)
+    ring_ok = np.isfinite(lidar["roof"]) & (lidar["roof"] >= 2.5) & (bmap == 0)    # measured just outside an outline
+    seen = np.zeros_like(cand)
+    added = 0
+    busy = np.isin(ground, (S_ROAD, S_LINE, S_WATER, S_SEA, S_PARKING))
+    for start in np.flatnonzero(cand):
+        if seen.flat[start]:
+            continue
+        stack, cells = [int(start)], []
+        seen.flat[start] = True
+        while stack:
+            i = stack.pop()
+            cells.append(i)
+            z, x = divmod(i, size)
+            for zz, xx in ((z - 1, x), (z + 1, x), (z, x - 1), (z, x + 1)):
+                if 0 <= zz < size and 0 <= xx < size and cand[zz, xx] and not seen[zz, xx]:
+                    seen[zz, xx] = True
+                    stack.append(zz * size + xx)
+        cells = np.array(cells)
+        # next to a mapped building: a tower, bay or porch its outline leaves out, so it joins that building. Between
+        # the two there may be one ring of cells the scan reader kept with the building (it measures one cell beyond
+        # each outline): those bridge the gap
+        cz, cx = np.divmod(cells, size)
+        nb_ids, bridge = [], []
+        for z, x in zip(cz, cx):
+            for z2, x2 in ((z - 1, x), (z + 1, x), (z, x - 1), (z, x + 1)):
+                if not (0 <= z2 < size and 0 <= x2 < size):
+                    continue
+                if bmap[z2, x2] > 0:
+                    nb_ids.append(bmap[z2, x2])
+                elif ring_ok[z2, x2] and not cand[z2, x2]:
+                    for z3, x3 in ((z2 - 1, x2), (z2 + 1, x2), (z2, x2 - 1), (z2, x2 + 1)):
+                        if 0 <= z3 < size and 0 <= x3 < size and bmap[z3, x3] > 0:
+                            nb_ids.append(bmap[z3, x3])
+                            bridge.append(z2 * size + x2)
+        if nb_ids:
+            owner = max(set(nb_ids), key=nb_ids.count)
+            bmap.flat[cells] = owner
+            lidar["roof"].flat[cells] = rel.flat[cells]
+            if bridge:
+                bridge = np.unique(bridge)
+                bmap.flat[bridge] = owner
+            attached = getattr(add_scanned_buildings, "attached", 0)
+            add_scanned_buildings.attached = attached + len(cells)
+            continue
+        if len(cells) < min_cells or busy.flat[cells].mean() > 0.3:
+            continue
+        pick = (int(cells[0]) * 2654435761) >> 8
+        house = len(cells) < 250
+        top = float(np.nanmedian(rel.flat[cells]))
+        sloped = np.nanpercentile(rel.flat[cells], 90) - np.nanpercentile(rel.flat[cells], 10) >= 1.5
+        if house:   # most small buildings round here are brick houses
+            wall = BRICK if pick % 5 < 3 else HOUSE_WALLS[pick % len(HOUSE_WALLS)]
+            roof, storey, glass, spacing, base = (DEEPSLATE_ROOF if sloped else FLAT_ROOFS[1]), 3, GLASS, 4, wall
+        else:
+            wall = BIG_WALLS[pick % len(BIG_WALLS)]
+            roof, storey, glass, spacing = (DEEPSLATE_ROOF if sloped else FLAT_ROOFS[pick % len(FLAT_ROOFS)]), 4, \
+                GLASSES[(pick >> 6) % len(GLASSES)], 3
+            base = BASES[(pick >> 12) % len(BASES)]
+        specs.append((max(3, int(round(top))), wall, roof, sloped, True, storey, glass, base, spacing,
+                      (pick >> 14) % len(DOORS) if sloped else 0, False, False))
+        bmap.flat[cells] = len(specs) - 1
+        lidar["roof"].flat[cells] = rel.flat[cells]
+        added += 1
+    return added
+
+
+def clean_roof_cells(value, bmap, use):
+    """Take out what on a roof is not the building. Branches over a roof (the scan's highest echo there is a tree) show as
+    thin strips and specks well above the roof: those cells become gaps, to be filled from the roof around them. Towers,
+    cupolas and steeples stand as compact blocks and are kept, peak and all. Then a 3 x 3 median within each building
+    smooths the rest of the roof (the scan's noise), so a flat roof does not come out as a field of one-block bumps."""
+    size = bmap.shape[0]
+    out = value.copy()
+    keep_peak = np.zeros(value.shape, dtype=bool)          # towers, spires, pinnacles: not smoothed away
+    ids = np.unique(bmap[use])
+    zz, xx = np.nonzero(use)
+    order = np.argsort(bmap[zz, xx], kind="stable")
+    zz, xx = zz[order], xx[order]
+    bounds = np.searchsorted(bmap[zz, xx], np.r_[ids, ids[-1] + 1]) if len(ids) else []
+    for k, b in enumerate(ids):
+        cz, cx = zz[bounds[k]:bounds[k + 1]], xx[bounds[k]:bounds[k + 1]]
+        v = out[cz, cx]
+        fin = np.isfinite(v)
+        if fin.sum() < 6:
+            continue
+        lid_level = np.percentile(v[fin], 90)
+        high = fin & (v > lid_level + 2.5)
+        if not high.any():
+            continue
+        # group the high cells (8 neighbours) and keep the compact ones
+        z0, x0 = cz.min(), cx.min()
+        grid = np.zeros((cz.max() - z0 + 3, cx.max() - x0 + 3), dtype=bool)
+        grid[cz[high] - z0 + 1, cx[high] - x0 + 1] = True
+        seen = np.zeros_like(grid)
+        for sz, sx in zip(*np.nonzero(grid)):
+            if seen[sz, sx]:
+                continue
+            stack, part = [(sz, sx)], []
+            seen[sz, sx] = True
+            while stack:
+                a, c = stack.pop()
+                part.append((a, c))
+                for da in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        na, nc = a + da, c + dc
+                        if grid[na, nc] and not seen[na, nc]:
+                            seen[na, nc] = True
+                            stack.append((na, nc))
+            pa = np.array(part)
+            h, w = np.ptp(pa[:, 0]) + 1, np.ptp(pa[:, 1]) + 1
+            compact = len(pa) >= 6 and min(h, w) >= 2 and len(pa) >= 0.55 * h * w and max(h, w) <= 3 * min(h, w) + 2
+            if not compact:
+                out[pa[:, 0] + z0 - 1, pa[:, 1] + x0 - 1] = np.nan
+            else:
+                keep_peak[pa[:, 0] + z0 - 1, pa[:, 1] + x0 - 1] = True
+    # 3 x 3 median within the same building (NaN-aware)
+    stack_v = []
+    for dz in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            nb_v = np.roll(np.roll(out, dz, 0), dx, 1)
+            nb_b = np.roll(np.roll(bmap, dz, 0), dx, 1)
+            stack_v.append(np.where(nb_b == bmap, nb_v, np.nan))
+    with np.errstate(all="ignore"):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            med = np.nanmedian(np.stack(stack_v), axis=0)
+    smoothed = np.where(keep_peak, out, med)
+    return np.where(use & np.isfinite(out), smoothed, np.where(use, np.nan, out))
+
+
+def clean_trees(trees, min_crown=1.0):
+    """The scan's tree tops, tidied: tops with a crown under 1 m from the trunk are poles, wires and lamp posts; a lower
+    top inside a taller tree's crown is a branch of that tree, not a tree of its own."""
+    if len(trees) == 0:
+        return trees
+    # and a "tree" far taller than it is wide (crown under 8% of its height) is a spire, a mast or a pinnacle the
+    # map's outline leaves out, not a tree
+    # A narrow top 8-14 m up with a crown under 1.5 m is a utility pole with its cross-arms and wires, which line the
+    # streets here, not a tree
+    pole = (trees[:, 2] >= 8) & (trees[:, 2] <= 14) & (trees[:, 3] < 1.5) & (trees[:, 3] < 0.15 * trees[:, 2])
+    t = trees[(trees[:, 3] >= min_crown) & (trees[:, 3] >= 0.08 * trees[:, 2]) & ~pole]
+    t = t[np.argsort(-t[:, 2], kind="stable")]
+    cell = 8.0
+    buckets = {}
+    keep = []
+    for row in t:
+        x, z, h, r = row
+        bx, bz = int(x // cell), int(z // cell)
+        hit = False
+        for gx in range(bx - 2, bx + 3):
+            for gz in range(bz - 2, bz + 3):
+                for kx, kz, kr in buckets.get((gx, gz), ()):
+                    if (x - kx) ** 2 + (z - kz) ** 2 < kr * kr:
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                break
+        if hit:
+            continue
+        keep.append(row)
+        buckets.setdefault((bx, bz), []).append((x, z, r))
+    return np.array(keep).reshape(-1, 4)
+
+
+def measured_roofs(bmap, g, floor0, rel):
+    """The layer of the top block of the roof in every building cell the laser scan measured (0 elsewhere).
+    rel: metres from the ground to the roof, NaN where the scan has nothing. A building counts as measured when most
+    of it has a roof at least 2 m up (a building put up after the scan has none). Gaps and cells where the outline on
+    the map overhangs the real wall take the nearest measured roof; nothing goes below the building's lowest tenth."""
+    size = bmap.shape[0]
+    out = np.zeros((size, size), dtype=np.int32)
+    good = np.isfinite(rel) & (rel >= 2.0) & (bmap > 0)
+    n_all = np.bincount(bmap.ravel(), minlength=int(bmap.max()) + 1)
+    n_good = np.bincount(bmap[good], minlength=len(n_all))
+    ok = (n_good >= 4) & (n_good >= 0.5 * n_all)
+    ok[0] = False
+    use = ok[bmap]
+    if not use.any():
+        return out
+    value = np.where(good & use, rel, np.nan)
+    value = clean_roof_cells(value, bmap, use)
+    for _ in range(8):                  # fill gaps from the measured cells beside them (side by side, not corners:
+        hole = use & np.isnan(value)    # an outline cell outside a gable takes the gable's height, not less)
+        if not hole.any():
+            break
+        total, count = np.zeros((size, size)), np.zeros((size, size))
+        for dz, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nb_v = np.roll(np.roll(value, dz, 0), dx, 1)
+            nb_b = np.roll(np.roll(bmap, dz, 0), dx, 1)
+            same = (nb_b == bmap) & np.isfinite(nb_v)
+            total += np.where(same, nb_v, 0)
+            count += same
+        value = np.where(hole & (count > 0), total / np.maximum(count, 1), value)
+    ids = bmap[use]
+    vals = value[use]
+    low = np.zeros(len(n_all))
+    for b in np.flatnonzero(ok):                            # the building's lowest tenth
+        v = vals[ids == b]
+        v = v[np.isfinite(v)]
+        low[b] = np.percentile(v, 10) if len(v) else 2.0
+    value = np.where(use, np.fmax(value, low[bmap]), np.nan)
+    value = np.where(np.isnan(value), low[bmap], value)
+    out[use] = np.maximum(g[use] + np.round(value[use]).astype(np.int32), floor0[use] + 2)
+    return out
+
+
+def draw_measured_roofs(vol, bmap, measured, mtop, eave_layer, wall, roof, sloped, stairs_of):
+    """Roofs as the laser scan saw them. Every cell gets its roof block at its measured height, and what is under it
+    down to its lower neighbours is filled in: roof blocks where the roof steps gently (a slope), the wall block where
+    it drops 3 or more (the sides of towers, gables, dormers, chimneys). On sloped roofs a block whose one higher
+    neighbour is opposite a lower one becomes a stair, so the roof slopes as it does in the game."""
+    size = bmap.shape[0]
+    zz, xx = np.indices((size, size))
+    low_nb = np.full((size, size), 1 << 20, dtype=np.int64)
+    nbs = []
+    for dz, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):        # north, south, west, east
+        zs, xs = np.clip(zz + dz, 0, size - 1), np.clip(xx + dx, 0, size - 1)
+        inside = (bmap[zs, xs] == bmap) & measured[zs, xs] & ((zs != zz) | (xs != xx))
+        t = np.where(inside, mtop[zs, xs], -1)              # outside the building counts as low
+        nbs.append(t)
+        low_nb = np.minimum(low_nb, np.where(inside, t, eave_layer - 1))
+    # under each roof block: down to one above the lowest neighbour, but not below the eaves (the walls are there)
+    start = np.maximum(np.maximum(low_nb + 1, eave_layer), 0)
+    drop = mtop - low_nb
+    for y in range(int(start[measured].min()), int(mtop.max()) + 1):
+        m = measured & (y >= start) & (y < mtop)
+        if not m.any():
+            continue
+        steep = drop >= 3
+        vol[y][m & steep] = wall[m & steep]
+        vol[y][m & ~steep] = roof[m & ~steep]
+    vol[mtop[measured], zz[measured], xx[measured]] = roof[measured]
+    # stairs: the foot of each step of a slope (one neighbour one block higher, the opposite one not higher), facing
+    # up the slope; not against towers or walls (a neighbour more than one block higher)
+    higher = [nb > mtop for nb in nbs]
+    n_higher = sum(h.astype(np.int8) for h in higher)
+    opposite = (1, 0, 3, 2)
+    for d in range(4):
+        m = measured & sloped & (n_higher == 1) & (nbs[d] - mtop == 1) & (nbs[opposite[d]] <= mtop) \
+            & (mtop - nbs[opposite[d]] <= 2)
+        vol[mtop[m], zz[m], xx[m]] = stairs_of[roof[m], d]
+
+
+def plant_measured_tree(vol, z, x, height, crown, rng, base, conifer=False):
+    """A tree as the laser scan measured it: `height` blocks from the ground to the top of the crown, a crown `crown`
+    blocks across from the trunk. Broadleaf trees get a rounded crown on a trunk about a third of the height; conifers a
+    pointed one that starts low."""
+    layers, size = vol.shape[0], vol.shape[1]
+    height = int(max(3, min(height, layers - base - 2)))
+    crown = max(1.0, min(float(crown), 9.0))
+    if conifer:
+        log, leaves = TREES[2]
+        bottom = base + max(1, int(round(height * 0.2)))
+    else:
+        log, leaves = TREES[1] if rng.random() < 0.2 else TREES[0]
+        bottom = base + max(2, int(round(height * (0.38 if height > 6 else 0.3))))
+    top = base + height - 1
+    mid = (bottom + top) / 2
+    half_h = max((top - bottom) / 2, 0.5)
+    r = int(math.ceil(crown))
+    for y in range(bottom, top + 1):
+        t = (y - mid) / half_h
+        if conifer:
+            rad = crown * (top + 0.5 - y) / max(top + 0.5 - bottom, 1)
+        else:
+            rad = crown * math.sqrt(max(0.0, 1 - min(1.0, t * t) * 0.85))
+        z0, z1, x0, x1 = max(z - r, 0), min(z + r + 1, size), max(x - r, 0), min(x + r + 1, size)
+        dz, dx = np.ogrid[z0 - z:z1 - z, x0 - x:x1 - x]
+        dist = np.sqrt(dz * dz + dx * dx)
+        edge = rng.random(dist.shape) < 0.45                  # a ragged outline, not a perfect ball
+        leaf = (dist <= rad - 0.5) | ((dist <= rad + 0.3) & edge) | (dist <= 1.0)   # always round the trunk
+        layer = vol[y, z0:z1, x0:x1]
+        layer[leaf & (layer == AIR)] = leaves
+    vol[base:top - 1, z, x] = log                          # the trunk stops inside the crown, never pokes out
+    vol[top, z, x] = leaves
+
+
+def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None, deep_water=True, lidar=None):
     """Turn the 2D maps into a 3D array of block numbers: vol[layer, z, x].
     terrain: None for flat ground, or (layer of the top block of every column, layer of the sea surface).
-    details: build_map.details (fences, walls, hedges, rails and benches), or None to leave them out."""
+    details: build_map.details (fences, walls, hedges, rails and benches), or None to leave them out.
+    lidar: load_lidar's result, or None. With it, buildings get their measured roofs (every 1 m of the roof at its
+    real height, towers and chimneys included) and the trees are the measured ones, at their real height and width."""
     details = details or {}
     size = ground.shape[0]
     rng = np.random.default_rng(seed)
@@ -1725,7 +2110,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         depth = np.where(sea, np.minimum(2 + shore * 0.35, 32), np.clip(1 + shore * 0.5, 2, 8))
         if terrain is not None and len(terrain) > 2:                 # the sea floor from the elevation data
             real = np.maximum(np.asarray(terrain[2], dtype=float), 2)
-            depth = np.where(sea, np.minimum(depth, real) if real[sea].max() > 2 else depth, depth)
+            depth = np.where(sea, np.minimum(depth, real) if sea.any() and real[sea].max() > 2 else depth, depth)
         depth = np.where(water, np.round(depth), 0).astype(np.int32)
         lift = max(0, int((depth - (level - 1))[water].max()))
         g, level, sea_level = g + lift, level + lift, sea_level + lift
@@ -1745,7 +2130,40 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     floor0 = base + 1                                          # first layer inside
     top_of_ground = np.where(has_building, base, np.where(water, bed, g))
 
+    # measured roofs: the layer of the top block of the roof in every cell of a building the laser scan saw
+    mtop = measured_roofs(bmap, g, floor0, lidar["roof"]) if lidar is not None else np.zeros((size, size), np.int32)
+    measured = mtop > 0
+    eave = np.zeros((size, size), dtype=np.int32)
+    sloped = np.zeros((size, size), dtype=bool)
+    if measured.any():
+        # the walls (floors, windows, rooms) go up to the eaves: the lower quarter of the roof's edge
+        edge_cells = measured & ~interior_of(bmap)
+        ids = bmap[edge_cells]
+        rise = (mtop - floor0)[edge_cells]
+        order = np.lexsort((rise, ids))
+        ids, rise = ids[order], rise[order]
+        starts = np.flatnonzero(np.r_[True, ids[1:] != ids[:-1]])
+        ends = np.r_[starts[1:], len(ids)]
+        per_building = np.zeros(len(specs), dtype=np.int32)
+        per_building[ids[starts]] = rise[starts + (ends - starts - 1) // 4]
+        eave = np.where(measured, np.maximum(per_building[bmap], 3), 0)
+        height = np.where(measured, eave, height)
+        # a sloped roof: the roof rises well above the eaves somewhere, over a good part of the building
+        spread = np.zeros(len(specs))
+        hi = np.where(measured, mtop - floor0 - eave, 0)
+        np.add.at(spread, bmap[measured], (hi[measured] >= 2).astype(float))
+        count = np.bincount(bmap[measured], minlength=len(specs)).astype(float)
+        sloped_b = spread / np.maximum(count, 1) > 0.3
+        sloped = measured & sloped_b[bmap]
+        stair_roofs = np.array(sorted(ROOF_STAIRS), dtype=np.uint8)
+        needs = sloped & ~np.isin(roof, stair_roofs)
+        roof = np.where(needs, DEEPSLATE_ROOF, roof).astype(np.uint8)       # slate grey unless the map says
+        flat_m = measured & ~sloped & np.isin(roof, stair_roofs)
+        roof = np.where(flat_m, FLAT_ROOFS[1], roof).astype(np.uint8)
+        pitched = np.where(measured, sloped, pitched)
+
     tallest = int((floor0 + height)[has_building].max()) if has_building.any() else 0
+    tallest = max(tallest, int(mtop.max()) + 1)
     top = max(int(g.max()) + 16, tallest + 16, int(level.max()) + 2, FLOOR + 27)
     layers = -(-(top + 1) // 16) * 16
     if layers * size * size > MAX_VOLUME_BYTES:
@@ -1934,9 +2352,9 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         furnished += int(m.sum())
 
     # flat roofs: one layer, a raised edge on the taller ones, and rooftop units (a stair head, air conditioning)
-    m = has_building & ~pitched
+    m = has_building & ~pitched & ~measured
     vol[(floor0 + height)[m], zz[m], xx[m]] = roof[m]
-    flat = has_building & ~pitched & (height >= 8)
+    flat = has_building & ~pitched & (height >= 8) & ~measured
     m = walls & flat
     vol[(floor0 + height + 1)[m], zz[m], xx[m]] = wall[m]
     deep = np.where(flat, bmap, 0)
@@ -1970,7 +2388,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     stairs_of = np.repeat(np.arange(256, dtype=np.uint8)[:, None], 4, axis=1)
     for full, variants in ROOF_STAIRS.items():
         stairs_of[full] = variants
-    pb = np.where(pitched, bmap, 0)
+    pb = np.where(pitched & ~measured, bmap, 0)
     building_base = building_bases(bmap, g, len(specs))
     for direction, nb in enumerate(neighbours(pb)):
         m = (nb > 0) & ~has_building
@@ -1990,6 +2408,9 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         ring = mask & (nxt == 0) & (edge_facing >= 0)
         vol[(floor0 + height + step)[ring], zz[ring], xx[ring]] = stairs_of[roof[ring], edge_facing[ring]]
         cur = nxt
+
+    if measured.any():
+        draw_measured_roofs(vol, bmap, measured, mtop, floor0 + eave, wall, roof, sloped, stairs_of)
 
     # railway tracks: each rail turns or climbs to join the rails beside it, as the game would lay them
     rails_laid = 0
@@ -2184,6 +2605,42 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
             chosen = rng.choice(cells, size=len(cells) // per_tree, replace=False)
             spots += [(int(c % size), int(c // size), False) for c in chosen]
     planted = 0
+    if lidar is not None:
+        # the laser scan found every tree: plant those, where they stand, as tall and as wide as they are; none made up.
+        # The trunk goes under the top of the crown, or on the nearest spot that is not a road, a building or water
+        spots = []
+        no_trunk = has_building | water | np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) | (details.get("rails") if details.get("rails") is not None else False)
+        for tx, tz, th, tr in lidar["trees"]:
+            x, z = int(tx), int(tz)
+            best = None
+            for d in range(0, 4):
+                for dz in range(-d, d + 1):
+                    for dx in range(-d, d + 1):
+                        if max(abs(dz), abs(dx)) != d:
+                            continue
+                        zz_, xx_ = z + dz, x + dx
+                        if 2 <= zz_ < size - 2 and 2 <= xx_ < size - 2 and not no_trunk[zz_, xx_] \
+                                and not taken[zz_, xx_]:
+                            best = (zz_, xx_)
+                            break
+                    if best:
+                        break
+                if best:
+                    break
+            if best is None:
+                continue
+            z, x = best
+            y = int(g[z, x]) + 1
+            if vol[y, z, x] != AIR:
+                continue
+            taken[z, x] = True
+            if ground[z, x] in paved:
+                vol[y - 1, z, x] = COARSE_DIRT
+            # conifers: only clearly narrow, pointed crowns (the 2019 scan was flown with the leaves off, which makes
+            # some broadleaf crowns look narrower than they are in summer)
+            plant_measured_tree(vol, z, x, round(th), tr, rng, y, conifer=tr < 0.13 * th and th >= 8)
+            planted += 1
+        spots = []
     for x, z, mapped in spots:
         if not (4 <= x < size - 4 and 4 <= z < size - 4):
             continue
@@ -2602,7 +3059,7 @@ def saves_folder():
 
 
 def safe_folder_name(text):
-    keep = "".join(c if c.isalnum() or c in " -_,." else " " for c in text)
+    keep = "".join(c if c.isalnum() or c in " -_,.&'()" else " " for c in text)
     return " ".join(keep.split())[:60] or "place2mc world"
 
 
@@ -2739,6 +3196,8 @@ def main():
                     help="do not add buildings and land cover from Overture Maps where OpenStreetMap has none")
     ap.add_argument("--overture-file", help="use Overture data saved earlier with --save-overture (works offline)")
     ap.add_argument("--save-overture", help="save the Overture data downloaded for this area to a .json file")
+    ap.add_argument("--lidar", help="a LiDAR summary made by app/lidar.js for this centre and size: the real ground, the "
+                                    "measured roof of every building and every tree at its real height")
     ap.add_argument("--tags", help='a .json file of map tags to add (colours, materials, floors) where the map has '
                                    'none, for example examples/ala/ala-tags.json')
     ap.add_argument("--textures", default="auto",
@@ -2834,9 +3293,16 @@ def main():
     print("Found: " + ", ".join(f"{v} {k}" for k, v in counts.items()))
     if counts["buildings"] + counts["roads"] == 0:
         print("Warning: no buildings or roads here. Is the place right, and is it mapped on openstreetmap.org?")
-    terrain = None if args.flat else make_terrain(lat, lon, size, ground, args.tile_cache)
+    lidar = None
+    if args.lidar:
+        lidar, extra = prepare_lidar(args.lidar, lat, lon, size, ground, bmap, specs)
+        print(f"LiDAR: {lidar['points'] or 0:,} laser points, {len(lidar['trees'])} trees, "
+              f"{int(np.isfinite(lidar['roof']).sum()):,} roof cells measured, {extra} buildings the map lacks")
+    terrain = None if args.flat else make_terrain(lat, lon, size, ground, args.tile_cache,
+                                                  elev=lidar["dtm"] if lidar is not None else None)
     vol, planted = build_volume(ground, bmap, specs, trees, terrain=terrain, details=build_map.details,
-                                deep_water=args.creating or not args.world)   # an existing world keeps its sea at y=-61
+                                deep_water=args.creating or not args.world,   # an existing world keeps its sea at y=-61
+                                lidar=lidar)
     print("Added " + ", ".join(f"{v} {k}" for k, v in build_volume.stats.items()) + ".")
     print(f"Tallest point: y={Y_MIN + int(np.flatnonzero(vol.reshape(vol.shape[0], -1).any(axis=1))[-1])}")
 

@@ -36,8 +36,12 @@ if os.environ.get("OVERTURE"):      # the --overture-file the world was made wit
 if os.environ.get("TAGS"):          # the --tags file the world was made with
     p.apply_tag_file(els, os.environ["TAGS"])
 ground, bmap, specs, trees, _ = p.build_map(els, lat, lon, size)
-terrain = p.make_terrain(lat, lon, size, ground, tiles) if tiles else None
-vol, _ = p.build_volume(ground, bmap, specs, trees, terrain=terrain, details=p.build_map.details)
+lidar = p.prepare_lidar(os.environ["LIDAR"], lat, lon, size, ground, bmap, specs)[0] if os.environ.get("LIDAR") else None
+if lidar is not None:                # the --lidar file the world was made with: the scan's ground, roofs and trees
+    terrain = p.make_terrain(lat, lon, size, ground, elev=lidar["dtm"])
+else:
+    terrain = p.make_terrain(lat, lon, size, ground, tiles) if tiles else None
+vol, _ = p.build_volume(ground, bmap, specs, trees, terrain=terrain, details=p.build_map.details, lidar=lidar)
 biomes = p.biome_map(ground)
 
 

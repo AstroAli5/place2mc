@@ -31,8 +31,12 @@ def cache_only(z, x, y, cache_dir):
         raise FileNotFoundError(path)
     return p.fetch_tile(z, x, y, cache_dir)
 
-terrain = p.make_terrain(lat, lon, size, ground, tile_cache, fetch=cache_only) if tile_cache else None
-vol, planted = p.build_volume(ground, bmap, specs, trees, terrain=terrain, details=p.build_map.details)
+lidar = p.prepare_lidar(os.environ["LIDAR"], lat, lon, size, ground, bmap, specs)[0] if os.environ.get("LIDAR") else None
+if lidar is not None:                # the --lidar file the world was made with: the scan's ground, roofs and trees
+    terrain = p.make_terrain(lat, lon, size, ground, elev=lidar["dtm"])
+else:
+    terrain = p.make_terrain(lat, lon, size, ground, tile_cache, fetch=cache_only) if tile_cache else None
+vol, planted = p.build_volume(ground, bmap, specs, trees, terrain=terrain, details=p.build_map.details, lidar=lidar)
 biomes = p.biome_map(ground)
 half = size // 2
 print("expected volume", vol.shape, "non-air blocks", int((vol != p.AIR).sum()))
