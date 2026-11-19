@@ -210,6 +210,22 @@ TINTS = {"grass_block_top": (145, 189, 89), "grass_block_side_overlay": (145, 18
          "tall_grass_bottom": (145, 189, 89), "tall_grass_top": (145, 189, 89),
          "oak_leaves": (119, 171, 47), "birch_leaves": (128, 167, 85), "spruce_leaves": (97, 153, 97),
          "water_still": (63, 118, 228)}
+TINTS.update({"acacia_leaves": (119, 171, 47), "jungle_leaves": (119, 171, 47)})
+_FOLIAGE = ("oak_leaves", "acacia_leaves", "jungle_leaves")
+_GRASS = ("grass_block_top", "grass_block_side_overlay", "short_grass", "grass", "fern", "tall_grass_bottom",
+          "tall_grass_top")
+
+
+def set_climate_tints(grass, foliage):
+    """Colour grass and leaves the way the game does in the place's biome (dry yellow-green on the savanna, deep
+    green in the tropics, ...). Pictures and the walk-through drawn afterwards use these colours."""
+    for name in _GRASS:
+        TINTS[name] = tuple(grass)
+    for name in _FOLIAGE:
+        TINTS[name] = tuple(foliage)
+    _TEXTURE_CACHE.clear()
+
+
 # what shows through the see-through parts of a texture
 BACKDROP = {"glass": (178, 205, 222), "leaves": (30, 62, 24), "door": (44, 34, 24), "rail": (132, 126, 122),
             "default": (40, 46, 56)}
@@ -425,7 +441,7 @@ def _make_textures(source=None):
     by_name["smooth_stone_slab"] = by_name["smooth_stone"]
     by_name["polished_deepslate_slab"] = by_name["gray_concrete"]
     masks = {}
-    for kind in ("oak", "birch", "spruce"):
+    for kind in ("oak", "birch", "spruce", "acacia", "jungle"):
         masks[kind + "_leaves"] = leaf_mask(kind + " leaves")
     for kind in ("grass", "tall_grass/lower", "tall_grass/upper", "fern", "dandelion", "poppy", "oxeye_daisy",
                  "cornflower", "azure_bluet"):
@@ -514,7 +530,7 @@ def _shapes():
 BOX_LO, BOX_HI, BOXED = _shapes()
 _names = [name.split(":")[1] for name, _ in p.BLOCKS]
 CROSS = np.array([n in ("grass", "tall_grass", "fern", "dandelion", "poppy", "oxeye_daisy", "cornflower",
-                        "azure_bluet") for n in _names])          # drawn as two crossed pictures, like in the game
+                        "azure_bluet", "dead_bush") for n in _names])          # drawn as two crossed pictures, like in the game
 SEE_THROUGH = np.array([n.endswith("_leaves") for n in _names])  # full cubes with holes ("fancy" leaves)
 PARTIAL = BOXED | CROSS | SEE_THROUGH
 INVISIBLE = np.array([n in ("barrier", "light") for n in _names])       # blocks the game does not draw

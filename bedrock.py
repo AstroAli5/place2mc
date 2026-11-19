@@ -23,7 +23,9 @@ NETWORK_VERSION = 859            # the protocol of Bedrock 1.21.120
 CHUNK_VERSION = 42               # chunk format of 1.21.120
 MIN_SECTION, MAX_SECTION = -4, 19     # the overworld from y=-64 to y=319, in 16-block sections
 BIOME_IDS = {"minecraft:plains": 1, "minecraft:forest": 4, "minecraft:river": 7, "minecraft:ocean": 0,
-             "minecraft:beach": 16}
+             "minecraft:beach": 16, "minecraft:savanna": 35, "minecraft:desert": 2, "minecraft:jungle": 21,
+             "minecraft:sparse_jungle": 23, "minecraft:taiga": 5, "minecraft:snowy_plains": 12,
+             "minecraft:snowy_taiga": 30}    # Bedrock's numbers: jungle_edge, ice_plains, cold_taiga in its own names
 TABLE_FILE = Path(__file__).resolve().parent / "bedrock_blocks.json"
 
 # --------------------------------------------------------------------------- little-endian NBT

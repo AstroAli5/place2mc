@@ -87,6 +87,20 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.3)
+
+v1.3: Ali: "see what you did wrong, deep search how to improve it for any place in the world, make GitHub cooler".
+Research and the list of what was wrong: docs/ROADMAP.md. Added: climate (set_climate/koppen_at, data/koppen.png
+= Rubel 2016 Köppen map from kgcpy, BSD-3, 0.25 deg; CLIMATES: biomes, S_GRASS ground mix, tree mix incl. acacia
+and jungle, grass/foliage tints via mcrender.set_climate_tints; build_map sets it, --climate CODE overrides);
+S_BARE for WorldCover "barren"; deep water (terrain_layers returns sea depth from the tiles' ETOPO1; shelf
+2+0.35*dist up to 32, lakes/rivers 1+0.5*dist up to 8; the whole world is lifted to make room; only for new
+worlds, deep_water=args.creating or not args.world); bridges (is_bridge: bridge!=no and layer>=1; build_bridges:
+deck height = max(ground at the ends, under + clearance 3 over water / 5 over roads and rails), slope <= 1/3,
+walls (GARDEN_WALLS joined at equal height), pillars every 12 blocks off roads; lay_rails shared by ground and
+deck rails). Fixed: inner-wall code overwrote `level` (water surface) since v1.0. check_details covers bridges,
+the tunnel, the lake depth; it reads the ground layer from build_volume.surface because deep water lifts land.
+
 ## State (v1.2)
 
 v1.2: Ali: "edit the GitHub page, cool pictures, simulations, make it so good". README redone: header with badges,
@@ -166,8 +180,8 @@ equator broke the command line; the street picture's camera could stand on a gre
 a gravel desert; campus outlines (amenity=college/school) were not downloaded; campus buildings were guessed
 5-7 storeys. Overpass was over capacity that day, so downloads now fall back to api.openstreetmap.org.
 
-Known limits: sea 2 blocks deep; a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
-memory; rails and fences are flat-ground objects (no bridges or tunnels at height); no signs.
+Known limits: a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
+memory; fences are flat-ground objects; bridges are worked out from the map alone (no real deck heights); no signs.
 
 ## Similar tools (for ideas)
 
@@ -177,5 +191,5 @@ memory; rails and fences are flat-ground objects (no bridges or tunnels at heigh
   keep its Apache-2.0 notice.
 - Terra++ (Build The Earth mod): elevation, biomes, tree cover and ocean depth from public data; /tpll.
 
-Next ideas, roughly in order: whatever breaks in Ali's first real test; street-name signs; bridges and tunnels at
-the right height; light blocks for night; building region by region for bigger areas.
+Next ideas: see docs/ROADMAP.md (canopy heights, Open Buildings 2.5D heights, kelp/seagrass, signs, Mapterhorn,
+region by region).

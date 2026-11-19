@@ -38,7 +38,16 @@ for el in [
     way([(-45, 15), (-10, 15), (-10, 42)], barrier="wall", height="2"),
     way([(-45, -14), (-10, -32)], barrier="hedge"),
     way([(-100, 60), (-70, 60), (-70, 90)], barrier="wall", material="brick", height="2.6"),
-    way([(-100, -55), (0, -55), (50, -85), (100, -85)], railway="rail"),
+    way([(-100, -55), (0, -55), (50, -85), (62, -85)], railway="rail"),
+    way([(62, -85), (98, -85)], railway="rail", bridge="yes", layer="1"),          # over the road below
+    way([(98, -85), (110, -85)], railway="rail"),
+    way([(80, -112), (80, -60)], highway="residential"),
+    way([(-60, 85), (110, 85)], waterway="river", width="12"),
+    way([(30, 55), (30, 70)], highway="secondary"),
+    way([(30, 70), (30, 100)], highway="secondary", bridge="yes", layer="1"),       # over the river
+    way([(30, 100), (30, 111)], highway="secondary"),
+    way([(-60, 104), (-30, 104)], highway="residential", tunnel="yes", layer="-1"),
+    way([(-55, 60), (-25, 60), (-25, 78), (-55, 78), (-55, 60)], natural="water"),
     way([(-100, 2), (100, 2)], railway="tram"),
     node(40, 8, amenity="bench"), node(-35, -7, amenity="bench"), node(16, 28, amenity="bench"),
     way([(50, 15), (95, 15), (95, 50), (50, 50), (50, 15)], amenity="parking"),
@@ -53,6 +62,7 @@ size = 224
 ground, bmap, specs, trees, counts = p.build_map(ELEMENTS, LAT, LON, size)
 vol, _ = p.build_volume(ground, bmap, specs, trees, details=p.build_map.details)
 stats = p.build_volume.stats
+FLOOR = int(np.median(p.build_volume.surface)) + 1      # deep water lifts the land; this is its first layer above
 print("map:", counts)
 print("blocks:", stats)
 names = [n.split(":")[1] for n, _ in p.BLOCKS]
@@ -119,7 +129,7 @@ def cell(x, z):
 
 
 # car park: white bay lines and parked cars; a traffic light (post and three lights) next to the road
-lines = int((vol[p.FLOOR, cell(50, 15)[0]:cell(95, 50)[0], cell(50, 15)[1]:cell(95, 50)[1]] == p.WHITE_CONCRETE).sum())
+lines = int((vol[FLOOR, cell(50, 15)[0]:cell(95, 50)[0], cell(50, 15)[1]:cell(95, 50)[1]] == p.WHITE_CONCRETE).sum())
 print(f"car park: {lines} line blocks, {stats['parked cars']} parked cars; traffic lights: {stats['traffic lights']}")
 if lines < 20 or stats["parked cars"] < 3:
     problems.append("car park has no bay lines or no cars")
@@ -128,19 +138,19 @@ if stats["traffic lights"] != 1 or not np.isin(vol, p.SIGNAL_LIGHTS).any():
 # covered walkway and shelter: a roof overhead and room to walk under it (open sides, pillars only)
 for name, (x, z) in (("covered walkway", (-80, 25)), ("covered walkway corner", (-60, 40)), ("shelter", (58, -25))):
     cz, cx = cell(x, z)
-    column = vol[p.FLOOR + 1:, cz, cx]
+    column = vol[FLOOR + 1:, cz, cx]
     roof_at = int(np.flatnonzero(column != p.AIR)[0]) if column.any() else -1
     if not (2 <= roof_at <= 5):
         problems.append(f"{name}: no roof 3-6 blocks over the path (first block {roof_at + 1} up)")
 for name, (x0, z0, x1, z1) in (("walkway", (-90, 23, -70, 27)), ("shelter", (50, -30, 66, -20))):
     (za, xa), (zb, xb) = cell(x0, z0), cell(x1, z1)
-    box = vol[p.FLOOR + 2, za:zb + 1, xa:xb + 1]
+    box = vol[FLOOR + 2, za:zb + 1, xa:xb + 1]
     if (box != p.AIR).mean() > 0.4:
         problems.append(f"{name}: closed in at head height, should stand on pillars")
 # office of 3 floors: 3 x 4 blocks + a roof block, with furniture inside
 (za, xa), (zb, xb) = cell(-95, -45), cell(-65, -20)
 office = vol[:, za:zb + 1, xa:xb + 1]
-tall = int(np.flatnonzero((office != p.AIR).reshape(office.shape[0], -1).any(axis=1))[-1]) - p.FLOOR
+tall = int(np.flatnonzero((office != p.AIR).reshape(office.shape[0], -1).any(axis=1))[-1]) - FLOOR
 shelves = int((office == p.BOOKSHELF).sum())
 print(f"office: {tall} blocks above the ground, {shelves} bookshelves, {int((office == p.DESK).sum())} desks")
 if not 14 <= tall <= 18 or shelves < 6:          # 13 of walls, the roof, its edge and rooftop units
@@ -148,9 +158,43 @@ if not 14 <= tall <= 18 or shelves < 6:          # 13 of walls, the roof, its ed
 
 if len(sys.argv) > 1:
     import mcrender
-    h = p.FLOOR
+    h = FLOOR
     mcrender.render(vol, (size / 2 - 60, h + 28, size / 2 + 55), (size / 2 - 5, h, size / 2 - 5), 1280, 720, 70,
                     ssaa=2).save(sys.argv[1])
     print("picture:", sys.argv[1])
+
+
+# bridges, a tunnel and deep water
+def column(x, z):
+    cz, cx = cell(x, z)
+    return vol[:, cz, cx], cz, cx
+
+
+col, cz, cx = column(30, 85)                       # the road bridge over the river
+water_top = int(np.flatnonzero(col == p.WATER)[-1]) if (col == p.WATER).any() else -1
+deck_y = int(np.flatnonzero(np.isin(col, (p.ROAD, p.ROAD_WORN)))[-1]) if np.isin(col, (p.ROAD, p.ROAD_WORN)).any() else -1
+print(f"road bridge: river surface at layer {water_top}, deck at {deck_y}")
+if water_top < 0 or deck_y - water_top < 3 or (col[water_top + 1:deck_y - 1] != p.AIR).any():
+    problems.append(f"road bridge: the river must run under the deck with room above it (water {water_top}, deck {deck_y})")
+col, cz, cx = column(30, 71)                       # where the bridge starts it meets the road
+end_deck = int(np.flatnonzero(np.isin(col, (p.ROAD, p.ROAD_WORN)))[-1])
+if end_deck - FLOOR > 3:
+    problems.append(f"road bridge starts {end_deck - FLOOR + 1} blocks above the ground")
+col, cz, cx = column(80, -85)                      # the railway bridge over the road
+rail_y = [int(y) for y in np.flatnonzero(np.isin(col, list(p.RAILS.values())))]
+road_y = [int(y) for y in np.flatnonzero(np.isin(col, (p.ROAD, p.ROAD_WORN)))]
+print(f"railway bridge: road at {road_y[:1]}, rails at {rail_y}")
+if not rail_y or not road_y or rail_y[-1] - road_y[0] < 5 or (col[road_y[0] + 1:road_y[0] + 4] != p.AIR).any():
+    problems.append("railway bridge: rails must pass over the road with room for traffic below")
+if stats["rails on bridges"] < 20:
+    problems.append(f"only {stats['rails on bridges']} rails on the railway bridge")
+col, cz, cx = column(-45, 104)
+if ground[cz, cx] in (p.S_ROAD, p.S_LINE):
+    problems.append("the road in a tunnel was drawn on the surface")
+col, cz, cx = column(-40, 69)                      # the middle of the lake
+depth = int((col == p.WATER).sum())
+print(f"lake: {depth} blocks deep in the middle")
+if depth < 4:
+    problems.append(f"lake only {depth} blocks deep in the middle")
 print("\n".join(problems[:20]) if problems else "details OK")
 sys.exit(1 if problems else 0)

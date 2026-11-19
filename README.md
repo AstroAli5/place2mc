@@ -46,6 +46,22 @@ and after dark the street lamps and the rooms behind the windows light up.
 | ![Monaco from the sea in the afternoon](docs/monaco-afternoon.jpg) | ![ALA's rooftops at sunset](docs/sunset-rooftops.jpg) |
 | ![A car park with parked cars](docs/car-park.jpg) | ![Fences, brick and garden walls, rails and a house](docs/fences-walls-rails.jpg) |
 
+## Any place on Earth
+
+Every place gets the climate it really has, from a world climate map: the biome, the colour of the grass and the
+leaves, sand or dry earth where nothing is mapped, and the trees that grow there.
+
+![The same test town in a temperate climate, a hot desert, a rainforest and a boreal forest](docs/climates.jpg)
+
+Bridges are lifted to the right height with ramps, walls and pillars, so rivers and roads pass underneath;
+tunnels are left out. The sea goes down to its real depth (the elevation data includes it), and lakes and
+rivers get deeper away from their banks.
+
+| | |
+|---|---|
+| ![A road bridge over a river](docs/bridge-river.jpg) | ![A railway viaduct over a street](docs/viaduct.jpg) |
+| ![West Oakland's elevated railway, from the real map](docs/west-oakland-viaduct.jpg) | ![Monaco's harbour, now 25 blocks deep](docs/deep-sea.jpg) |
+
 ## How it works
 
 Everything sits where it is in the real place, at real size: 1 block is 1 metre.
@@ -74,8 +90,9 @@ What gets built, besides streets, buildings and hills:
   half slabs where a street climbs
 - **Car parks** with bay lines and parked cars; shelters and covered walkways on pillars
 - **Fences, garden walls, face-brick walls and hedges**, railway and tram tracks, benches
-- **Nature**: parks, forests, lawns, street trees and mapped trees, bushes and flowers by the walls, rivers, lakes
-  and the sea
+- **Bridges** at the right height over rivers, roads and railways, with ramps, walls and pillars; tunnels left out
+- **Nature** in the place's own climate: parks, forests, lawns, street trees and mapped trees (oak, birch, spruce,
+  acacia, jungle), bushes and flowers by the walls, dead bushes in dry places, rivers, lakes and the sea at its depth
 
 ## Use it
 
@@ -136,6 +153,12 @@ aerial imagery (Microsoft, Google) and Esri's community maps, with heights, floo
 and **ESA WorldCover** land cover (forest, shrubs, crops, bare ground) seen from space. It only adds what
 OpenStreetMap does not have, and never replaces it. Turn it off with `--no-overture`.
 
+## Roadmap
+
+[docs/ROADMAP.md](docs/ROADMAP.md): what was wrong and has been fixed, what research found about making this work
+for any place in the world (tree heights from satellite maps, building heights across Africa and Asia, sharper
+hills), and what comes next.
+
 ## How it was checked, and what was not
 
 The worlds were read back block by block with independent readers: nbtlib and anvil-parser2 for Java,
@@ -154,7 +177,11 @@ elevation tiles), and the game's own textures for the pictures.
 - Buildings the map lacks: [Overture Maps Foundation](https://overturemaps.org) (ODbL); land cover from
   [ESA WorldCover](https://esa-worldcover.org) (CC BY 4.0), through Overture's base theme. The way to read them
   (PMTiles over HTTP) follows Arnis.
-- Elevation: Terrain Tiles on AWS (Mapzen / Tilezen), from SRTM, USGS and other public sources.
+- Elevation: Terrain Tiles on AWS (Mapzen / Tilezen), from SRTM, USGS, NOAA ETOPO1 (sea depths) and other
+  public sources.
+- Climate: the Köppen-Geiger map of Rubel, Brugger, Haslinger and Auer (2016), as shipped in
+  [kgcpy](https://github.com/cwru-sdle/kgcpy) (BSD-3), reduced to 0.25 degrees in `data/koppen.png`.
+- Bridges follow the idea of [OSM2World](https://osm2world.org): heights worked out from the map and the terrain.
 - Textures for the pictures and the walk-through when Minecraft is not installed: [Pixel Perfection CE](https://github.com/Athemis/PixelPerfectionCE)
   by XSSheep and contributors, CC BY-SA 4.0 (see `textures/pixel-perfection-ce/CREDITS.md`).
 - Map in the app: [Leaflet](https://leafletjs.com) (BSD-2-Clause, licence in `app/leaflet/LICENSE`).

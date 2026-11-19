@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.2"
+VERSION = "1.3"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -109,8 +109,10 @@ SHORT_GRASS = block("grass")
 TALL_GRASS = (block("tall_grass", half="lower"), block("tall_grass", half="upper"))
 FERN = block("fern")
 FLOWERS = [block(n) for n in ("dandelion", "poppy", "oxeye_daisy", "cornflower", "azure_bluet")]
-BIOMES = ["minecraft:plains", "minecraft:forest", "minecraft:river", "minecraft:ocean", "minecraft:beach"]
-PLAINS, FOREST, RIVER, OCEAN, BEACH = range(len(BIOMES))
+BIOMES = ["minecraft:plains", "minecraft:forest", "minecraft:river", "minecraft:ocean", "minecraft:beach",
+          "minecraft:savanna", "minecraft:desert", "minecraft:jungle", "minecraft:sparse_jungle", "minecraft:taiga",
+          "minecraft:snowy_plains", "minecraft:snowy_taiga"]
+PLAINS, FOREST, RIVER, OCEAN, BEACH = range(5)
 STONE_BRICKS = block("stone_bricks")
 BRICK = block("bricks")
 POLISHED_ANDESITE = block("polished_andesite")
@@ -128,7 +130,88 @@ TREES = [
     (block("oak_log"), block("oak_leaves", persistent="true")),
     (block("birch_log"), block("birch_leaves", persistent="true")),
     (block("spruce_log"), block("spruce_leaves", persistent="true")),
+    (block("acacia_log"), block("acacia_leaves", persistent="true")),
+    (block("jungle_log"), block("jungle_leaves", persistent="true")),
 ]
+DEAD_BUSH = block("dead_bush")
+
+# ---------------------------------------------------------------------------------------------- climate
+# Every place gets the biome, grass colour, bare ground and trees of its climate, from the Köppen-Geiger map of
+# Rubel et al. (2016), shipped with the kgcpy package (BSD-3), reduced to 0.25 degrees in data/koppen.png.
+KOPPEN = ("Af Am As Aw BSh BSk BWh BWk Cfa Cfb Cfc Csa Csb Csc Cwa Cwb Cwc Dfa Dfb Dfc Dfd Dsa Dsb Dsc Dsd "
+          "Dwa Dwb Dwc Dwd EF ET Ocean").split()
+CLIMATES = {   # biome for open land, biome for woods, ground where nothing is mapped, trees, grass and leaf colours
+    "tropical": dict(biomes=("jungle", "jungle"), ground="green",
+                     trees={"jungle": 6, "oak": 5, "round": 4, "acacia": 3}, grass=(89, 201, 60), foliage=(48, 187, 11)),
+    "savanna": dict(biomes=("savanna", "sparse_jungle"), ground="dry",
+                    trees={"acacia": 9, "oak": 5, "round": 2}, grass=(191, 183, 85), foliage=(174, 164, 42)),
+    "desert": dict(biomes=("desert", "savanna"), ground="desert",
+                   trees={"acacia": 9, "oak": 2}, grass=(191, 183, 85), foliage=(174, 164, 42)),
+    "steppe": dict(biomes=("savanna", "savanna"), ground="dry",
+                   trees={"acacia": 5, "oak": 6, "round": 2}, grass=(176, 182, 86), foliage=(150, 160, 48)),
+    "mediterranean": dict(biomes=("plains", "forest"), ground="green",
+                          trees={"oak": 9, "round": 6, "spruce": 2, "acacia": 2}, grass=(150, 186, 84), foliage=(115, 165, 50)),
+    "highland": dict(biomes=("plains", "forest"), ground="green",
+                     trees={"oak": 8, "round": 6, "birch": 2, "acacia": 2, "spruce": 1}, grass=(145, 189, 89), foliage=(119, 171, 47)),
+    "temperate": dict(biomes=("plains", "forest"), ground="green",
+                      trees={"oak": 8, "round": 4, "birch": 4, "spruce": 4}, grass=(145, 189, 89), foliage=(119, 171, 47)),
+    "continental": dict(biomes=("plains", "forest"), ground="green",
+                        trees={"oak": 6, "round": 3, "birch": 6, "spruce": 5}, grass=(140, 186, 98), foliage=(112, 168, 62)),
+    "boreal": dict(biomes=("taiga", "taiga"), ground="green",
+                   trees={"spruce": 12, "birch": 4}, grass=(134, 183, 131), foliage=(104, 164, 100)),
+    "polar": dict(biomes=("snowy_plains", "snowy_taiga"), ground="tundra",
+                  trees={"spruce": 1}, grass=(128, 180, 151), foliage=(96, 161, 123)),
+}
+CLIMATE_OF = {"A": "tropical", "As": "savanna", "Aw": "savanna", "BW": "desert", "BS": "steppe", "Cs": "mediterranean",
+              "Cw": "highland", "Cf": "temperate", "Da": "continental", "Db": "continental", "Dc": "boreal",
+              "Dd": "boreal", "E": "polar"}
+CLIMATE = dict(CLIMATES["temperate"], code="Cfb", kind="temperate")    # until a place is chosen
+
+
+def koppen_at(lat, lon):
+    """Köppen-Geiger code (like "Cfb") at a point; a coastal point that falls in the sea takes the nearest land."""
+    from PIL import Image
+    grid = np.asarray(Image.open(Path(__file__).resolve().parent / "data" / "koppen.png"))
+    h, w = grid.shape
+    y, x = min(int((90 - lat) / 180 * h), h - 1), int((lon + 180) / 360 * w) % w
+    if 1 <= grid[y, x] <= 31:
+        return KOPPEN[int(grid[y, x]) - 1]
+    for r in range(1, 5):                         # a point by the sea: the commonest climate up to a degree inland
+        window = grid[max(0, y - r):y + r + 1, [(x + dx) % w for dx in range(-r, r + 1)]]
+        land = window[(window >= 1) & (window <= 31)]
+        if len(land):
+            values, counts = np.unique(land, return_counts=True)
+            return KOPPEN[int(values[np.argmax(counts)]) - 1]
+    return "Cfb"
+
+
+def set_climate(lat=None, lon=None, code=None):
+    """Choose the biomes, ground, trees and colours for a place (or for a Köppen code given directly)."""
+    code = code or koppen_at(lat, lon)
+    if code[0] == "A":
+        kind = CLIMATE_OF.get(code, "tropical")
+    elif code[0] in "BC":
+        kind = CLIMATE_OF[code[:2]]
+    elif code[0] == "D":
+        kind = CLIMATE_OF["Da" if code[2] in "ab" else "Dc"]
+    else:
+        kind = "polar"
+    CLIMATE.clear()
+    CLIMATE.update(CLIMATES[kind], code=code, kind=kind)
+    ground = CLIMATE["ground"]
+    SURFACE_MIX[S_GRASS] = {"green": [(GRASS, 1)],
+                            "dry": [(GRASS, 70), (COARSE_DIRT, 22), (DIRT, 8)],
+                            "desert": [(SAND, 76), (COARSE_DIRT, 14), (GRAVEL, 10)],
+                            "tundra": [(GRASS, 55), (COARSE_DIRT, 20), (GRAVEL, 15), (STONE, 10)]}[ground]
+    SURFACE_MIX[S_BARE] = ([(SAND, 70), (COARSE_DIRT, 15), (GRAVEL, 15)] if ground == "desert" else
+                           [(COARSE_DIRT, 45), (GRAVEL, 25), (DIRT, 15), (STONE, 15)])
+    SURFACE_MIX[S_INDUSTRIAL] = ([(SAND, 45), (GRAVEL, 22), (COARSE_DIRT, 23), (ANDESITE, 10)] if ground == "desert"
+                                 else [(GRASS, 62), (GRAVEL, 16), (COARSE_DIRT, 12), (ANDESITE, 10)])
+    if ground in ("dry", "desert", "tundra"):
+        PATCHY.add(S_GRASS)
+    else:
+        PATCHY.discard(S_GRASS)
+    return CLIMATE
 
 FACINGS = ("north", "south", "west", "east")          # index 0..3, used for stairs and doors
 NORTH, SOUTH, WEST, EAST = range(4)
@@ -215,7 +298,7 @@ BLOCK_RGB = {
 
 # surface classes painted on the 2D map (one byte per block column). S_GRASS is also "nothing mapped here".
 (S_GRASS, S_FOREST, S_PARK, S_FARM, S_SAND, S_WATER, S_PAVED, S_SIDEWALK, S_ROAD, S_PATH, S_FOOT, S_PITCH, S_GRAVEL,
- S_LAWN, S_PLAZA, S_QUAY, S_LINE, S_PARKING, S_SEA, S_INDUSTRIAL) = range(20)
+ S_LAWN, S_PLAZA, S_QUAY, S_LINE, S_PARKING, S_SEA, S_INDUSTRIAL, S_BARE) = range(21)
 # each surface is a weighted mix of blocks, so big areas do not look like one flat colour
 SURFACE_MIX = {
     S_GRASS: [(GRASS, 1)], S_LAWN: [(GRASS, 1)], S_PARK: [(GRASS, 1)],
@@ -233,8 +316,9 @@ SURFACE_MIX = {
     S_QUAY: [(STONE_BRICKS, 70), (COBBLE, 15), (ANDESITE, 15)],
     # industrial land: the yards between buildings, in patches of grass, gravel and bare ground
     S_INDUSTRIAL: [(GRASS, 62), (GRAVEL, 16), (COARSE_DIRT, 12), (ANDESITE, 10)],
+    S_BARE: [(COARSE_DIRT, 45), (GRAVEL, 25), (DIRT, 15), (STONE, 15)],          # bare ground seen from space
 }
-PATCHY = {S_INDUSTRIAL}         # surfaces mixed in patches several blocks across, not block by block
+PATCHY = {S_INDUSTRIAL, S_BARE}         # surfaces mixed in patches several blocks across, not block by block
 SURFACE_BLOCK = {surface: mix[0][0] for surface, mix in SURFACE_MIX.items()}   # main block, used for the preview
 
 # highway type -> (width in blocks, surface class, has sidewalks)
@@ -269,7 +353,7 @@ AREAS = {
     # show where the map says nothing
     ("place2mc:land_cover", "forest"): (S_FOREST, 2.5), ("place2mc:land_cover", "mangrove"): (S_FOREST, 2.5),
     ("place2mc:land_cover", "shrub"): (S_PARK, 1.5), ("place2mc:land_cover", "wetland"): (S_PARK, 1.5),
-    ("place2mc:land_cover", "crop"): (S_FARM, -1), ("place2mc:land_cover", "barren"): (S_FARM, -1),
+    ("place2mc:land_cover", "crop"): (S_FARM, -1), ("place2mc:land_cover", "barren"): (S_BARE, -1),
     # school and college grounds: lawn, drawn over the landuse around them and under their pitches and gardens
     ("amenity", "school"): (S_PARK, 1), ("amenity", "college"): (S_PARK, 1), ("amenity", "university"): (S_PARK, 1),
     ("amenity", "kindergarten"): (S_PARK, 1),
@@ -447,7 +531,8 @@ def terrain_layers(elev, ground):
         print(f"Note: hills are {relief.max():.0f} m high here; heights are squeezed to {scale:.2f}x to fit the world.")
     layers = GROUND + np.round(np.clip(relief, 0, None) * scale).astype(np.int32)
     sea_level = GROUND + int(round(-lowest * scale))
-    return layers, sea_level
+    depth = np.where(sea, np.clip(-elev * scale, 0, None), 0.0)     # how deep the sea is (the tiles include it)
+    return layers, sea_level, depth
 
 
 def make_terrain(lat, lon, size, ground, cache_dir=None, fetch=fetch_tile):
@@ -457,7 +542,7 @@ def make_terrain(lat, lon, size, ground, cache_dir=None, fetch=fetch_tile):
     except Exception as exc:
         print(f"Could not get elevation data ({exc}); building on flat ground instead.")
         return None
-    layers, sea_level = terrain_layers(elev, ground)
+    layers, sea_level, depth = terrain_layers(elev, ground)
     # ramp the outer edge down to the flat world around the build, so it ends in a slope rather than a cliff
     band = max(1, min(48, size // 8))
     z, x = np.indices(layers.shape)
@@ -467,7 +552,7 @@ def make_terrain(lat, lon, size, ground, cache_dir=None, fetch=fetch_tile):
     layers = GROUND + np.round((layers - GROUND) * w).astype(np.int32)
     print(f"Hills: {elev.min():.0f} m to {elev.max():.0f} m above sea level "
           f"({int(layers.max() - layers.min())} blocks from lowest to highest point)")
-    return layers, sea_level
+    return layers, sea_level, depth
 
 
 def open_maybe_compressed(path):
@@ -681,8 +766,10 @@ def polygon_area(pts):
     return abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]))) / 2
 
 
-def build_map(elements, lat0, lon0, size):
-    """Paint the map data onto 2D arrays. Returns everything build_volume needs."""
+def build_map(elements, lat0, lon0, size, climate=None):
+    """Paint the map data onto 2D arrays. Returns everything build_volume needs. Also sets the place's climate
+    (or the Köppen code given as climate), which build_volume uses for ground, trees and biomes."""
+    set_climate(lat0, lon0, climate)
     m_lat, m_lon = metres_per_degree(lat0)
     half = size / 2
 
@@ -697,6 +784,7 @@ def build_map(elements, lat0, lon0, size):
 
     areas, roads, waterways, rails, buildings, trees, coast, piers, marked = [], [], [], [], [], [], [], [], []
     crossing_ways, crossing_nodes, barriers, benches, campuses, industrial, signals = [], [], [], [], [], [], []
+    bridges = []          # (width, surface class, line, layer, is a railway)
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -762,6 +850,14 @@ def build_map(elements, lat0, lon0, size):
                     roof_tags = {k: v for k, v in tags.items() if k.startswith("roof:")}
                     buildings.append((el.get("id", 0), dict(roof_tags, building="roof", **{"place2mc:walkway": "yes"}),
                                       pieces, [], False))
+            if base in ROADS and is_bridge(tags):              # built up in the air later, not on the ground
+                width, surface, _ = ROADS[base]
+                try:
+                    width = max(width, round(float(tags["lanes"]) * 3.5))
+                except (KeyError, ValueError):
+                    pass
+                bridges.append((width, surface, line, bridge_layer(tags), False))
+                continue
             if base in ROADS and tags.get("tunnel") != "yes":
                 width, surface, sidewalk = ROADS[base]
                 if tags.get("area") == "yes" and closed:
@@ -782,7 +878,9 @@ def build_map(elements, lat0, lon0, size):
         railway = tags.get("railway")
         if railway and kind == "way" and len(line) >= 2:
             underground = tags.get("tunnel") in ("yes", "building_passage") or tags.get("location") == "underground"
-            if railway in TRACKS and not underground:
+            if railway in TRACKS and not underground and is_bridge(tags):
+                bridges.append((4, S_GRAVEL, line, bridge_layer(tags), True))
+            elif railway in TRACKS and not underground:
                 rails.append((railway, line))
             elif railway == "platform" and not underground:
                 if closed:
@@ -995,7 +1093,7 @@ def build_map(elements, lat0, lon0, size):
     for _, line in rails:
         for x, y in line_cells(line, size):
             track[y, x] = True
-    build_map.details = {"barriers": (barrier_kind, barrier_tall), "rails": track,
+    build_map.details = {"barriers": (barrier_kind, barrier_tall), "rails": track, "bridges": bridges,
                          "signals": [(int(x), int(y)) for x, y in signals if 0 <= x < size and 0 <= y < size],
                          "benches": [(int(x), int(y)) for x, y in benches if 0 <= x < size and 0 <= y < size]}
     sea_arr = np.array(sea) > 0 if sea is not None else np.zeros((size, size), dtype=bool)
@@ -1035,6 +1133,18 @@ def barrier_height(tags):
     except ValueError:
         metres = {"city_wall": 4.0, "hedge": 1.4}.get(tags.get("barrier"), 1.0)
     return int(min(max(round(metres), 1), 6))
+
+
+def is_bridge(tags):
+    """A way on a bridge (bridge=yes, viaduct, ...) that is above the ground, not a bridge at layer 0 or below."""
+    return tags.get("bridge") not in (None, "no") and bridge_layer(tags) >= 1
+
+
+def bridge_layer(tags):
+    try:
+        return int(float(tags.get("layer", "1")))
+    except ValueError:
+        return 1
 
 
 def line_cells(points, size):
@@ -1172,11 +1282,24 @@ def leaf_layer(vol, y, z, x, radius, leaves, trim_corners=True):
 
 
 def plant_tree(vol, z, x, rng, small=False, base=FLOOR):
-    """Four kinds of tree. A normal tree fits within 3 blocks of the trunk, a small one within 2."""
-    roll = int(rng.integers(0, 20))
-    if small and 8 <= roll < 12:
-        roll = 0
-    if roll < 8:                                   # ordinary oak
+    """Six kinds of tree, in the mix of the place's climate. A normal tree fits within 3 blocks of the trunk, a small
+    one within 2."""
+    kinds = CLIMATE["trees"]
+    names = list(kinds)
+    weights = np.array([kinds[n] for n in names], dtype=float)
+    kind = names[int(np.searchsorted(np.cumsum(weights) / weights.sum(), rng.random(), side="right"))]
+    if small and kind in ("round", "jungle"):
+        kind = "oak"
+    roll = {"oak": 0, "round": 8, "birch": 12, "spruce": 16, "acacia": 20, "jungle": 24}[kind]
+    if roll == 20:                                 # acacia: a bare trunk and a flat crown, as on the savanna
+        log, leaves = TREES[3]
+        trunk = int(rng.integers(4, 6))
+        shape = [(trunk, 2 if small else 3), (trunk + 1, 1 if small else 2)]
+    elif roll == 24:                               # jungle tree: tall, with a broad crown
+        log, leaves = TREES[4]
+        trunk = int(rng.integers(8, 12))
+        shape = [(trunk - 2, 3), (trunk - 1, 3), (trunk, 2), (trunk + 1, 1)]
+    elif roll < 8:                                 # ordinary oak
         log, leaves = TREES[0]
         trunk = int(rng.integers(4, 7))
         shape = [(trunk - 2, 2), (trunk - 1, 2), (trunk, 1), (trunk + 1, 0)]
@@ -1242,7 +1365,153 @@ def building_bases(bmap, g, n_buildings):
     return base
 
 
-def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None):
+def distance_from(mask, limit=64):
+    """Blocks from each cell to the nearest cell of mask (counting diagonal steps as one), up to limit."""
+    dist = np.where(mask, 0, limit).astype(np.int32)
+    reached = mask.copy()
+    for k in range(1, limit):
+        grown = reached | (window_fraction(reached, 1) > 0)
+        new = grown & ~reached
+        if not new.any():
+            break
+        dist[new] = k
+        reached = grown
+    return dist
+
+
+def lay_rails(vol, track, base):
+    """Rails on the cells of track, on top of the blocks at layer base: each one turns or climbs to join the rails
+    beside it, as the game would lay them."""
+    size = track.shape[0]
+    track_g = np.where(track, base, -100)
+    joins = [nb > 0 for nb in neighbours(track.astype(np.int32))]         # north, south, west, east
+    up = [nb == base + 1 for nb in neighbours(track_g)]
+    n, s_, w, e = joins
+    shape = np.full((size, size), RAILS["north_south"], dtype=np.uint8)
+    shape[(w | e) & ~(n | s_)] = RAILS["east_west"]
+    for (a, b), name in (((s_, e), "south_east"), ((s_, w), "south_west"), ((n, w), "north_west"),
+                         ((n, e), "north_east")):
+        shape[a & b & ~(n & s_) & ~(w & e)] = RAILS[name]
+    for d, name in enumerate(("ascending_north", "ascending_south", "ascending_west", "ascending_east")):
+        shape[track & up[d]] = RAILS[name]
+    z_i, x_i = np.nonzero(track)
+    y = base[z_i, x_i] + 1
+    free = vol[y, z_i, x_i] == AIR
+    vol[y[free], z_i[free], x_i[free]] = shape[z_i[free], x_i[free]]
+    return int(free.sum())
+
+
+def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_track=None, bed=None):
+    """Roads and railways on bridges, at a height worked out the way OSM2World does it (the map only says that a
+    bridge passes over something): the deck meets the ground at both ends, stays clear of what it crosses (2 blocks of
+    headroom over water, 4 over roads and rails, 5 more per extra layer), and climbs no steeper than 1 in 3 so rails
+    can follow. A two-block deck with walls along both edges, on stone pillars every 12 blocks that keep out of
+    roads and tracks underneath. Returns (deck and pillar blocks placed, rails laid on bridges)."""
+    if not bridges:
+        return 0, 0
+    size = g.shape[0]
+    layers = vol.shape[0]
+    under = np.where(water, level, g)                            # the top of what is below each cell
+    busy = np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) | (ground_track if ground_track is not None else False)
+    deck = np.full((size, size), -1, dtype=np.int32)             # layer of the deck's top block
+    edge = np.full((size, size), -1, dtype=np.int32)             # the walls along the sides: layer of their deck
+    rail_deck = np.zeros((size, size), dtype=bool)
+    surface_of = np.zeros((size, size), dtype=np.uint8)
+    pillars = []
+    for width, surface, line, layer, railway in bridges:
+        pts = np.asarray(line, dtype=float)
+        seg = np.diff(pts, axis=0)
+        lengths = np.hypot(seg[:, 0], seg[:, 1])
+        total = float(lengths.sum())
+        if total < 1:
+            continue
+        s_at = np.arange(0, total + 0.5, 0.5)                    # a point every half block along the bridge
+        cum = np.r_[0, np.cumsum(lengths)]
+        i = np.clip(np.searchsorted(cum, s_at, side="right") - 1, 0, len(seg) - 1)
+        t = ((s_at - cum[i]) / np.maximum(lengths[i], 1e-9))[:, None]
+        p = pts[i] + seg[i] * t
+        d = seg[i] / np.maximum(lengths[i], 1e-9)[:, None]       # direction, and across it
+        nrm = np.stack([-d[:, 1], d[:, 0]], axis=1)
+        inside = (p[:, 0] >= 0) & (p[:, 0] < size) & (p[:, 1] >= 0) & (p[:, 1] < size)
+        if inside.sum() < 2:
+            continue
+        p, d, nrm, s_at = p[inside], d[inside], nrm[inside], s_at[inside]
+        half = width / 2
+        across = np.arange(-half, half + 0.01, 0.5)
+        cx = np.clip((p[:, None, 0] + nrm[:, None, 0] * across[None]).astype(int), 0, size - 1)
+        cz = np.clip((p[:, None, 1] + nrm[:, None, 1] * across[None]).astype(int), 0, size - 1)
+        below = under[cz, cx].max(axis=1)
+        crossing_busy = busy[cz, cx].any(axis=1) & (s_at > s_at[0] + half + 2) & (s_at < s_at[-1] - half - 2)
+        # (the road leading onto the bridge at each end is not something it has to clear)
+        crossing_water = water[cz, cx].any(axis=1)
+        clearance = np.where(crossing_busy, 5, np.where(crossing_water, 3, 0)) + 5 * (layer - 1) * (
+            crossing_busy | crossing_water)                       # over plain ground the deck may sit on it
+        need = below + clearance
+        x0, z0 = int(p[0, 0]), int(p[0, 1])
+        x1, z1 = int(p[-1, 0]), int(p[-1, 1])
+        ends = np.interp(s_at, [s_at[0], s_at[-1]], [g[z0, x0], g[z1, x1]])
+        h = np.maximum(ends, need).astype(float)
+        step = 0.5 / 3                                           # at most 1 block up per 3 along
+        for k in range(1, len(h)):
+            h[k] = max(h[k], h[k - 1] - step)
+        for k in range(len(h) - 2, -1, -1):
+            h[k] = max(h[k], h[k + 1] - step)
+        h = np.round(h).astype(np.int32)
+        hh = np.broadcast_to(h[:, None], cx.shape)
+        deck[cz, cx] = np.maximum(deck[cz, cx], hh)
+        surface_of[cz, cx] = surface
+        if railway:
+            mid = np.abs(across) < 0.75
+            rail_deck[cz[:, mid], cx[:, mid]] = True
+        for side in (-1, 1):                                     # the walls along both edges
+            ex = np.clip((p[:, 0] + nrm[:, 0] * side * (half + 1)).astype(int), 0, size - 1)
+            ez = np.clip((p[:, 1] + nrm[:, 1] * side * (half + 1)).astype(int), 0, size - 1)
+            edge[ez, ex] = np.maximum(edge[ez, ex], h)
+        for k in range(0, len(h), 24):                           # pillars every 12 blocks, at both edges
+            if h[k] - below[k] < 3:
+                continue
+            for side in (-1, 1):
+                px = int(np.clip(p[k, 0] + nrm[k, 0] * side * max(half - 1, 0.5), 0, size - 1))
+                pz = int(np.clip(p[k, 1] + nrm[k, 1] * side * max(half - 1, 0.5), 0, size - 1))
+                if not busy[pz, px] and not has_building[pz, px]:
+                    pillars.append((pz, px, int(h[k])))
+    placed = 0
+    deck_block = {S_ROAD: ROAD, S_PATH: SMOOTH_STONE, S_FOOT: SMOOTH_STONE, S_PAVED: PAVED, S_GRAVEL: GRAVEL,
+                  S_SIDEWALK: SMOOTH_STONE}
+    zz, xx = np.nonzero((deck >= 0) & ~has_building)
+    for z, x in zip(zz, xx):
+        y = int(deck[z, x])
+        if not 2 <= y < layers - 4:
+            continue
+        vol[y, z, x] = deck_block.get(int(surface_of[z, x]), ROAD)
+        if y - under[z, x] >= 4:                                  # a thicker deck where there is room under it
+            vol[y - 1, z, x] = STONE_BRICKS
+        for up in range(1, 4):                                   # room to walk: no leaves or grass on the deck
+            if vol[y + up, z, x] not in (AIR, LANTERN, LAMP_POST):
+                vol[y + up, z, x] = AIR
+        placed += 2
+    walls = (edge >= 0) & (deck < 0) & ~has_building
+    wall_h = np.where(walls, edge, -100)
+    same = [nb == wall_h for nb in neighbours(wall_h)]            # join walls at the same height: N, S, W, E
+    bits = sum(same[i].astype(np.int32) << i for i in range(4))
+    for z, x in zip(*np.nonzero(walls)):
+        y = int(edge[z, x])
+        if 2 <= y < layers - 2:
+            vol[y, z, x] = STONE_BRICKS
+            vol[y + 1, z, x] = GARDEN_WALLS[int(bits[z, x])]
+            placed += 2
+    for z, x, y in pillars:
+        bottom = int(bed[z, x]) if (water[z, x] and bed is not None) else int(under[z, x]) + 1   # from the river bed
+        for yy in range(max(1, bottom), y - 1):
+            vol[yy, z, x] = STONE_BRICKS
+            placed += 1
+    rails = 0
+    if rail_deck.any():
+        rails = lay_rails(vol, rail_deck & (deck >= 0), np.where(deck >= 0, deck, 0))
+    return placed, rails
+
+
+def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None, deep_water=True):
     """Turn the 2D maps into a 3D array of block numbers: vol[layer, z, x].
     terrain: None for flat ground, or (layer of the top block of every column, layer of the sea surface).
     details: build_map.details (fences, walls, hedges, rails and benches), or None to leave them out."""
@@ -1266,13 +1535,26 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         g, sea_level = terrain[0].astype(np.int32).copy(), int(terrain[1])
     zz, xx = np.indices((size, size))
 
-    # water: the sea at sea level with its real depth; lakes and rivers at the lowest nearby bank, 2 blocks deep
+    # water: the sea at sea level, lakes and rivers at the lowest nearby bank. They get deeper away from the shore:
+    # the sea down to its real depth where the elevation data has it (a gentle shelf near the coast, at most 32
+    # blocks), lakes and rivers up to 8 blocks. In a new world everything is lifted to make room below.
     sea = (ground == S_SEA) & ~has_building
     water = (np.isin(ground, (S_WATER, S_SEA))) & ~has_building
     level = np.where(water, local_min(np.where(water, g, 1 << 20), 3), g)
     level = np.minimum(level, g)
     level[sea] = sea_level
-    bed = np.where(sea, np.minimum(g, sea_level - 2), level - 2)
+    if deep_water and water.any():
+        shore = distance_from(~water, 96)
+        depth = np.where(sea, np.minimum(2 + shore * 0.35, 32), np.clip(1 + shore * 0.5, 2, 8))
+        if terrain is not None and len(terrain) > 2:                 # the sea floor from the elevation data
+            real = np.maximum(np.asarray(terrain[2], dtype=float), 2)
+            depth = np.where(sea, np.minimum(depth, real) if real[sea].max() > 2 else depth, depth)
+        depth = np.where(water, np.round(depth), 0).astype(np.int32)
+        lift = max(0, int((depth - (level - 1))[water].max()))
+        g, level, sea_level = g + lift, level + lift, sea_level + lift
+        bed = np.where(water, level - depth, level - 2)
+    else:
+        bed = np.where(sea, np.minimum(g, sea_level - 2), level - 2)
     bed = np.clip(bed, 1, None)
     level[water] = np.maximum(level[water], bed[water] + 1)
     # banks: land right next to water must be at least as high as the water, or the water would spill out
@@ -1315,7 +1597,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
         layer[has_building & (y > g) & (y < base)] = STONE_BRICKS        # foundation on the downhill side
         layer[y == top_of_ground] = surface[y == top_of_ground]
     vol[base[has_building], zz[has_building], xx[has_building]] = SMOOTH_STONE
-    vol[bed[water], zz[water], xx[water]] = SAND
+    deep_bed = water & (level - bed > 7)                         # sand near the shore, gravel further out
+    vol[bed[water], zz[water], xx[water]] = np.where(deep_bed[water] & ((zz + xx * 3)[water] % 5 < 3), GRAVEL, SAND)
     for d in range(1, int((level - bed)[water].max()) + 1 if water.any() else 0):
         m = water & (bed + d <= level)
         vol[(bed + d)[m], zz[m], xx[m]] = WATER
@@ -1410,8 +1693,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     doorway = partition & (((xx % 9 == 0) & (zz % 9 == 4)) | ((zz % 9 == 0) & (xx % 9 == 4)))
     inner_walls = 0
     for k in range(1, int(height.max())):
-        level = k % np.maximum(storey, 1)
-        m = partition & (k < height) & (level != 0) & ~(doorway & ((level == 1) | (level == 2)))
+        in_storey = k % np.maximum(storey, 1)
+        m = partition & (k < height) & (in_storey != 0) & ~(doorway & ((in_storey == 1) | (in_storey == 2)))
         y = floor0 + k
         m &= vol[np.minimum(y, layers - 1), zz, xx] == AIR
         vol[y[m], zz[m], xx[m]] = WHITE_CONCRETE
@@ -1510,23 +1793,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
     rails_laid = 0
     track = details.get("rails")
     if track is not None:
-        track = track & ~has_building & ~water
-        track_g = np.where(track, g, -100)
-        joins = [nb > 0 for nb in neighbours(track.astype(np.int32))]         # north, south, west, east
-        up = [nb == g + 1 for nb in neighbours(track_g)]
-        n, s_, w, e = joins
-        shape = np.full((size, size), RAILS["north_south"], dtype=np.uint8)
-        shape[(w | e) & ~(n | s_)] = RAILS["east_west"]
-        for (a, b), name in (((s_, e), "south_east"), ((s_, w), "south_west"), ((n, w), "north_west"),
-                             ((n, e), "north_east")):
-            shape[a & b & ~(n & s_) & ~(w & e)] = RAILS[name]
-        for d, name in enumerate(("ascending_north", "ascending_south", "ascending_west", "ascending_east")):
-            shape[track & up[d]] = RAILS[name]
-        z_i, x_i = np.nonzero(track)
-        y = g[z_i, x_i] + 1
-        free = vol[y, z_i, x_i] == AIR
-        vol[y[free], z_i[free], x_i[free]] = shape[z_i[free], x_i[free]]
-        rails_laid = int(free.sum())
+        rails_laid = lay_rails(vol, track & ~has_building & ~water, g)
 
     # fences, garden walls and hedges from the map; left open where a road or path goes through
     barrier_cells = 0
@@ -1764,24 +2031,35 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None)
             else:
                 vol[y, z_i, x_i] = np.array(FLOWERS, dtype=np.uint8)[kind[m]]
             plants += len(z_i)
+    if CLIMATE["ground"] in ("dry", "desert"):        # dead bushes on the sand and dry earth
+        bare_ground = np.isin(vol[g, zz, xx], (SAND, COARSE_DIRT)) & (vol[g + 1, zz, xx] == AIR) & ~has_building & \
+            np.isin(ground, (S_GRASS, S_BARE, S_INDUSTRIAL)) & (roll < (0.02 if CLIMATE["ground"] == "desert" else 0.008))
+        z_i, x_i = np.nonzero(bare_ground)
+        vol[g[bare_ground] + 1, z_i, x_i] = DEAD_BUSH
+        plants += len(z_i)
+    bridge_blocks, bridge_rails = build_bridges(vol, details.get("bridges", []), g, level, water, ground,
+                                                has_building, details.get("rails"), bed)
     for y, oz, ox in doorways:                         # keep the way out of every door clear (on a slope this
         vol[y:y + 2, oz, ox] = AIR                     # digs a doorway into the hillside), done last so nothing
                                                        # placed later can fill it
     build_volume.stats = {"trees": planted, "street lamps": lamps, "doors": doors_placed, "plants and flowers": plants,
                           "half slabs on slopes": slabs, "rails": rails_laid, "fence, wall and hedge blocks": barrier_cells,
                           "benches": benches, "bushes and flowers by buildings": landscaping,
-                          "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals}
+                          "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals,
+                          "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
 
 def biome_map(ground):
-    """One biome per 4x4 block column, the way the game stores them: forest, river, ocean, beach or plains."""
+    """One biome per 4x4 block column, the way the game stores them: the climate's biomes for open land and for
+    woods, and river, ocean or beach."""
     n = ground.shape[0] // 4
     cells = ground[:n * 4, :n * 4].reshape(n, 4, n, 4).transpose(0, 2, 1, 3).reshape(n, n, 16)
     share = lambda classes: np.isin(cells, classes).mean(axis=2)
-    out = np.full((n, n), PLAINS, dtype=np.uint8)
-    out[share((S_FOREST,)) > 0.5] = FOREST
+    land, woods = (BIOMES.index("minecraft:" + b) for b in CLIMATE["biomes"])
+    out = np.full((n, n), land, dtype=np.uint8)
+    out[share((S_FOREST,)) > 0.5] = woods
     sea_near = window_fraction(share((S_SEA,)) > 0, 2) > 0
     out[(share((S_SAND,)) > 0.5) & sea_near] = BEACH
     out[share((S_WATER,)) > 0.5] = RIVER
@@ -2094,6 +2372,8 @@ def main():
     ap.add_argument("--save-osm", help="save the downloaded map data to this .json file")
     ap.add_argument("--preview-only", action="store_true", help="only make the preview picture")
     ap.add_argument("--screenshots", action="store_true", help="also draw game-style 3D pictures (needs mcrender.py next to this file)")
+    ap.add_argument("--climate", metavar="CODE",
+                    help="Köppen climate code to use instead of the place's own, e.g. BWh (hot desert), Af (rainforest)")
     ap.add_argument("--picture-time", default="afternoon", choices=("morning", "midday", "afternoon", "sunset", "night"),
                     help="time of day for the --screenshots pictures: the real sun at this place today (default afternoon)")
     ap.add_argument("--plain-pictures", action="store_true",
@@ -2183,12 +2463,22 @@ def main():
         print(f"Added tags from {args.tags} to {apply_tag_file(elements, args.tags)} map objects")
     print(f"Centre {lat:.5f}, {lon:.5f}  |  {size} x {size} blocks  |  {len(elements)} map objects")
 
-    ground, bmap, specs, trees, counts = build_map(elements, lat, lon, size)
+    ground, bmap, specs, trees, counts = build_map(elements, lat, lon, size, climate=args.climate)
+    climate = CLIMATE
+    print(f"Climate: {climate['code']} ({climate['kind']}): {climate['biomes'][0]} biome, "
+          f"{', '.join(k for k in climate['trees'])} trees")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))          # mcrender.py and walkdata.py sit here too
+    try:
+        import mcrender
+        mcrender.set_climate_tints(climate["grass"], climate["foliage"])
+    except ImportError:
+        pass
     print("Found: " + ", ".join(f"{v} {k}" for k, v in counts.items()))
     if counts["buildings"] + counts["roads"] == 0:
         print("Warning: no buildings or roads here. Is the place right, and is it mapped on openstreetmap.org?")
     terrain = None if args.flat else make_terrain(lat, lon, size, ground, args.tile_cache)
-    vol, planted = build_volume(ground, bmap, specs, trees, terrain=terrain, details=build_map.details)
+    vol, planted = build_volume(ground, bmap, specs, trees, terrain=terrain, details=build_map.details,
+                                deep_water=args.creating or not args.world)   # an existing world keeps its sea at y=-61
     print("Added " + ", ".join(f"{v} {k}" for k, v in build_volume.stats.items()) + ".")
     print(f"Tallest point: y={Y_MIN + int(np.flatnonzero(vol.reshape(vol.shape[0], -1).any(axis=1))[-1])}")
 
