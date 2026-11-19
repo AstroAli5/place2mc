@@ -32,6 +32,19 @@ mouse, jump, sprint, fly (F), go 2, 4 or 8 times faster (1-4), change the time o
 
 <p align="center"><img src="docs/flyover.gif" width="640" alt="Flying round the ALA campus in the browser walk-through"></p>
 
+### With sound
+
+Footsteps that sound like what you walk on (grass, stone, wood, sand, gravel, water), a thud when you land,
+birds in the day, crickets at night, waves near the sea, wind when you fly high, and everything muffled when
+your head is under water. A calm piano plays in the background: place2mc's own music, made up fresh as you walk,
+with long quiet gaps like the game's. Press M to turn it off, or N (the "Play your own music" button) to play a
+song from your own computer or phone instead; it stays on your device. Everything is made in the page with the
+Web Audio API, no sound files.
+
+<p align="center"><img src="docs/sound.png" width="760" alt="The sound of a walk at ALA: footsteps, piano notes and birds, then crickets after dark"></p>
+<p align="center"><sub>22 seconds of walking at ALA, recorded from the page: footsteps (short vertical lines), piano notes
+(the stacked lines), birds (high chirps), then T for night and the crickets. <a href="docs/walk-sound-ala.m4a">Listen</a>.</sub></p>
+
 ## The real sun
 
 The sun stands where it really does over that place on the day you look at it: east in the morning, north at noon
@@ -61,6 +74,14 @@ rivers get deeper away from their banks.
 |---|---|
 | ![A road bridge over a river](docs/bridge-river.jpg) | ![A railway viaduct over a street](docs/viaduct.jpg) |
 | ![West Oakland's elevated railway, from the real map](docs/west-oakland-viaduct.jpg) | ![Monaco's harbour, now 25 blocks deep](docs/deep-sea.jpg) |
+
+Under water there are seagrass meadows, and kelp forests in cool seas (the Mediterranean gets mostly seagrass,
+like the real one; frozen seas get none). Swim down in the walk-through and the world turns blue-green.
+Diagonal bridges keep their walls joined all the way across.
+
+| | |
+|---|---|
+| ![Swimming in Monaco's harbour: seagrass and kelp](docs/underwater.jpg) | ![A diagonal footbridge over a river with seagrass](docs/diagonal-footbridge.jpg) |
 
 ## How it works
 

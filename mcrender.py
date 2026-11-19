@@ -128,11 +128,16 @@ def plant(kind):
     img = np.zeros((T, T, 3), dtype=float)
     solid = np.zeros((T, T), dtype=bool)
     greens = np.array([(70, 128, 44), (88, 150, 52), (104, 166, 62), (60, 112, 38)], dtype=float)
-    if kind in ("grass", "tall_grass/lower", "tall_grass/upper"):
+    if kind in ("seagrass", "tall_seagrass/lower", "tall_seagrass/upper", "kelp", "kelp_plant"):
+        greens = np.array([(52, 120, 64), (66, 140, 72), (40, 100, 56), (78, 150, 82)], dtype=float)
+        if kind.startswith("kelp"):
+            greens = np.array([(84, 120, 40), (98, 136, 46), (70, 104, 34), (110, 146, 52)], dtype=float)
+    if kind in ("grass", "tall_grass/lower", "tall_grass/upper", "seagrass", "tall_seagrass/lower",
+                "tall_seagrass/upper", "kelp", "kelp_plant"):
         for x in range(1, T - 1, 2):
-            if kind == "tall_grass/lower":
+            if kind.endswith("/lower") or kind == "kelp_plant":
                 top = int(rng.integers(0, 3))
-            elif kind == "tall_grass/upper":
+            elif kind.endswith("/upper") or kind == "kelp":
                 top = int(rng.integers(4, 13))
             else:
                 top = int(rng.integers(5, 12))
@@ -301,7 +306,7 @@ class TextureSource:
             base = BUNDLED_STANDINS.get(base, base)
         backdrop = BACKDROP["leaves"] if "leaves" in name else BACKDROP["glass"] if name == "glass" else \
             BACKDROP["door"] if "_door/" in name else BACKDROP["rail"] if name == "rail" else BACKDROP["default"]
-        if "_door/" in name or name.startswith("tall_grass/"):
+        if "_door/" in name or name.startswith(("tall_grass/", "tall_seagrass/")):
             kind, half = name.split("/")
             got = self.get(kind + ("_bottom" if half == "lower" else "_top"), backdrop)
             if got is None:
@@ -444,13 +449,14 @@ def _make_textures(source=None):
     for kind in ("oak", "birch", "spruce", "acacia", "jungle"):
         masks[kind + "_leaves"] = leaf_mask(kind + " leaves")
     for kind in ("grass", "tall_grass/lower", "tall_grass/upper", "fern", "dandelion", "poppy", "oxeye_daisy",
-                 "cornflower", "azure_bluet"):
+                 "cornflower", "azure_bluet", "seagrass", "tall_seagrass/lower", "tall_seagrass/upper", "kelp",
+                 "kelp_plant"):
         by_name[kind], masks[kind] = plant(kind)
     tex = np.zeros((len(p.BLOCKS), 2, T, T, 3), dtype=np.float32)
     solid = np.ones((len(p.BLOCKS), 2, T, T), dtype=bool)
     for i, (full_name, props) in enumerate(p.BLOCKS):
         name = full_name.split(":")[1]
-        if name.endswith("_door") or name == "tall_grass":
+        if name.endswith("_door") or name in ("tall_grass", "tall_seagrass"):
             name += "/" + props["half"]
         entry = source.block(name) if source is not None and name not in ("air", "barrier") else None
         if entry is not None:
@@ -530,7 +536,8 @@ def _shapes():
 BOX_LO, BOX_HI, BOXED = _shapes()
 _names = [name.split(":")[1] for name, _ in p.BLOCKS]
 CROSS = np.array([n in ("grass", "tall_grass", "fern", "dandelion", "poppy", "oxeye_daisy", "cornflower",
-                        "azure_bluet", "dead_bush") for n in _names])          # drawn as two crossed pictures, like in the game
+                        "azure_bluet", "dead_bush", "seagrass", "tall_seagrass", "kelp", "kelp_plant")
+                  for n in _names])          # drawn as two crossed pictures, like in the game
 SEE_THROUGH = np.array([n.endswith("_leaves") for n in _names])  # full cubes with holes ("fancy" leaves)
 PARTIAL = BOXED | CROSS | SEE_THROUGH
 INVISIBLE = np.array([n in ("barrier", "light") for n in _names])       # blocks the game does not draw
@@ -709,7 +716,8 @@ AO_LEVELS = np.array([0.50, 0.68, 0.84, 1.0], dtype=np.float32)
 _LIGHT_PASSES = np.array([n in ("air", "glass", "light_blue_stained_glass", "gray_stained_glass", "lantern", "barrier")
                           or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall")) or n == "rail"
                           for n in _names]) | CROSS
-_DIMS_LIGHT = np.array([n.endswith("_leaves") or n == "water" for n in _names])
+UNDERWATER = np.array([n in ("seagrass", "tall_seagrass", "kelp", "kelp_plant") for n in _names])   # full of water
+_DIMS_LIGHT = np.array([n.endswith("_leaves") or n == "water" for n in _names]) | UNDERWATER
 OPAQUE = ~(_LIGHT_PASSES | _DIMS_LIGHT)
 _BLOCKS_SKY_BELOW = OPAQUE | np.array([n.endswith(("_slab", "_stairs")) for n in _names])
 # what darkens the corners next to it (smooth lighting): full, solid cubes only

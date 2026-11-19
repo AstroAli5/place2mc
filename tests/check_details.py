@@ -46,6 +46,9 @@ for el in [
     way([(30, 55), (30, 70)], highway="secondary"),
     way([(30, 70), (30, 100)], highway="secondary", bridge="yes", layer="1"),       # over the river
     way([(30, 100), (30, 111)], highway="secondary"),
+    way([(52, 62), (62, 72)], highway="footway"),
+    way([(62, 72), (94, 104)], highway="footway", bridge="yes", layer="1"),       # a diagonal footbridge
+    way([(94, 104), (104, 114)], highway="footway"),
     way([(-60, 104), (-30, 104)], highway="residential", tunnel="yes", layer="-1"),
     way([(-55, 60), (-25, 60), (-25, 78), (-55, 78), (-55, 60)], natural="water"),
     way([(-100, 2), (100, 2)], railway="tram"),
@@ -188,11 +191,33 @@ if not rail_y or not road_y or rail_y[-1] - road_y[0] < 5 or (col[road_y[0] + 1:
     problems.append("railway bridge: rails must pass over the road with room for traffic below")
 if stats["rails on bridges"] < 20:
     problems.append(f"only {stats['rails on bridges']} rails on the railway bridge")
+# the diagonal footbridge: its walls must be two unbroken lines (a wall block joins only the blocks beside it)
+z0, x0 = cell(60, 70)
+z1, x1 = cell(96, 106)
+box = vol[:, z0:z1, x0:x1]
+wall_ids = list(set(p.GARDEN_WALLS))
+wall_cells = {(int(z), int(x)) for _, z, x in zip(*np.nonzero(np.isin(box, wall_ids)))}
+pieces, seen = 0, set()
+for c in wall_cells:
+    if c in seen:
+        continue
+    pieces += 1
+    todo = [c]
+    seen.add(c)
+    while todo:
+        z, x = todo.pop()
+        for n in ((z + 1, x), (z - 1, x), (z, x + 1), (z, x - 1)):
+            if n in wall_cells and n not in seen:
+                seen.add(n)
+                todo.append(n)
+print(f"diagonal footbridge: {len(wall_cells)} wall blocks in {pieces} pieces")
+if not wall_cells or pieces > 2:
+    problems.append(f"diagonal footbridge walls are broken into {pieces} pieces (should be 2)")
 col, cz, cx = column(-45, 104)
 if ground[cz, cx] in (p.S_ROAD, p.S_LINE):
     problems.append("the road in a tunnel was drawn on the surface")
 col, cz, cx = column(-40, 69)                      # the middle of the lake
-depth = int((col == p.WATER).sum())
+depth = int(np.isin(col, (p.WATER, *p.UNDERWATER_PLANTS)).sum())
 print(f"lake: {depth} blocks deep in the middle")
 if depth < 4:
     problems.append(f"lake only {depth} blocks deep in the middle")

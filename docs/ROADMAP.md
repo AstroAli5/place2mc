@@ -66,11 +66,21 @@ across Africa, South Asia, South-East Asia, Latin America and the Caribbean
 ([Google Research](https://sites.research.google/gr/open-buildings/temporal)). Most ALA buildings have no height
 on any map; this would give them one.
 
+## What was wrong in v1.3 (fixed in v1.4)
+
+- Walls on bridges that run diagonally were loose posts: a wall block only joins the blocks beside it, and the
+  wall cells only touched at their corners. The walls now follow the whole outline of the deck.
+- A world built from a map file was named after the file's full path ("home claude compare monaco.osm"); it is
+  now named after the file ("Monaco").
+- On a phone held sideways the start screen was taller than the screen, so the walk button could be cut off;
+  it now scrolls, and short screens hide the key list.
+- The walk-through was silent, and swimming showed the sky instead of water.
+
 ## What comes next
 
 - [ ] Real tree heights and positions from Meta/WRI's canopy height maps
 - [ ] Building heights from Google Open Buildings 2.5D where neither OpenStreetMap nor Overture has one
-- [ ] Kelp and seagrass in the sea, snow in winter in cold climates
+- [ ] Snow in winter in cold climates; coral in tropical seas
 - [ ] Street-name signs and shop signs (Overture places has the names)
 - [ ] Sharper hills from Mapterhorn where it has high-resolution data
 - [ ] Bigger areas, built region by region
@@ -78,3 +88,5 @@ on any map; this would give them one.
 - [x] Climate: biomes, grass colour, ground and trees for every place
 - [x] The sea at its real depth; deeper lakes and rivers
 - [x] Bridges at the right height, tunnels left out
+- [x] Seagrass and kelp under water, by climate (v1.4); Bedrock gets the water layer the game needs for them
+- [x] Sounds in the walk-through: footsteps by surface, birds, crickets, waves, wind, original piano music (v1.4)

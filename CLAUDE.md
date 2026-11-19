@@ -65,6 +65,7 @@ python tests/make_bedrock_table.py mcdata                           # after addi
 python tests/check_blocks.py mcdata 1.18 1.21.4                     # names, states, shapes vs the game
 python tests/check_details.py out.png                               # fences, walls, rails, zebras, benches
 python tests/check_sun.py                                           # sun position, shadows in the pictures
+python tests/walk_sound.py "OUT/<name>/Walk around <name>.html"     # footsteps, music, birds; no page errors
 python tests/fake_tiles.py TILES LAT,LON 608                        # test hills without internet
 python place2mc.py --osm-file MAP --center LAT,LON --radius 300 --saves OUT --tile-cache TILES --edition both
 python tests/verify_world.py MAP LAT,LON 300 "OUT/<name>" TILES     # Java, read back with 2 libraries
@@ -86,6 +87,22 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - New worlds are void around the build, so water on the edge is walled in with invisible barrier blocks.
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
+
+## State (v1.4)
+
+v1.4: Ali: same as v1.3 + "put the sound of walking and put Warmth by C418 in the background". Warmth is Mojang's
+copyrighted music: never bundle, download or recreate it. Instead walk.html makes all sound with Web Audio (no
+files): footsteps by the block underfoot (materialOf: grass, stone, wood, sand, gravel, snow, water), landing
+thud, original generated piano (pentatonic phrases over a chord walk, long rests, lower and softer at night),
+birds by day, crickets at night (reset when T changes the time), waves by how much water is within 16 blocks,
+wind by height, muffled under water; M mutes the music, N / "Play your own music" plays a file from the user's
+device (object URL, never uploaded); ♪ touch button. window.__walk.sound has counters for tests
+(tests/walk_sound.py records the output). Also: seagrass, tall seagrass and kelp (UNDERWATER_PLANTS; kelp
+forests by climate: none in polar/tropical/savanna, 0.2 in mediterranean); Bedrock stores their water in
+sub-chunk layer 1 (bedrock.WET; verify_bedrock checks layer 1); walk.html draws water in their cells
+(world.wet) and blue-green fog with the eye under water; mcrender cannot place its camera under water.
+Bridge walls = the 8-neighbour outline of each deck (minus the ends), so diagonal walls join. Worlds from
+--osm-file are named after the file. The start screen scrolls and hides the key table below 560 px high.
 
 ## State (v1.3)
 

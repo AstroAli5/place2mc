@@ -64,36 +64,52 @@ for i, e in enumerate(entries):
 # 2. decode every sub-chunk and compare with the volume
 offset = size // 32
 seen_palette, checked, wrong, chunks = set(), 0, 0, set()
+wet_sections = 0
 for key, value in db.items():
     if len(key) != 10 or key[8] != 47:
         continue
     cx, cz = struct.unpack("<ii", key[:8])
     y_index = struct.unpack("b", key[9:10])[0]
-    assert value[0] == 9 and value[1] == 1 and struct.unpack("b", value[2:3])[0] == y_index
-    bits = value[3] >> 1
-    per = 32 // bits
-    nwords = -(-4096 // per)
-    words = np.frombuffer(value[4:4 + 4 * nwords], dtype="<u4")
-    shifts = np.arange(per, dtype=np.uint32) * np.uint32(bits)
-    idx = ((words[:, None] >> shifts[None, :]) & np.uint32((1 << bits) - 1)).ravel()[:4096]
-    pos = 4 + 4 * nwords
-    count = struct.unpack("<I", value[pos:pos + 4])[0]
-    buf = io.BytesIO(value[pos + 4:])
-    pal = []
-    for _ in range(count):
-        e = nbtlib.File.parse(buf, byteorder="little")         # an independent NBT reader
-        name = str(e["name"]).split(":")[1]
-        states = tuple(sorted((str(k), (int(v) if isinstance(v, (nbtlib.Byte, nbtlib.Int)) else str(v)))
-                              for k, v in e["states"].items()))
-        assert (name, states, int(e["version"])) in valid, f"not a valid Bedrock state: {name} {states}"
-        seen_palette.add(name)
-        pal.append(lookup[(name, states)])
+    assert value[0] == 9 and value[1] in (1, 2) and struct.unpack("b", value[2:3])[0] == y_index
+    pos, layers = 3, []
+    for _layer in range(value[1]):
+        bits = value[pos] >> 1
+        per = 32 // bits
+        nwords = -(-4096 // per)
+        words = np.frombuffer(value[pos + 1:pos + 1 + 4 * nwords], dtype="<u4")
+        shifts = np.arange(per, dtype=np.uint32) * np.uint32(bits)
+        idx = ((words[:, None] >> shifts[None, :]) & np.uint32((1 << bits) - 1)).ravel()[:4096]
+        pos += 1 + 4 * nwords
+        count = struct.unpack("<I", value[pos:pos + 4])[0]
+        buf = io.BytesIO(value[pos + 4:])
+        pal = []
+        for _ in range(count):
+            e = nbtlib.File.parse(buf, byteorder="little")     # an independent NBT reader
+            name = str(e["name"]).split(":")[1]
+            states = tuple(sorted((str(k), (int(v) if isinstance(v, (nbtlib.Byte, nbtlib.Int)) else str(v)))
+                                  for k, v in e["states"].items()))
+            assert (name, states, int(e["version"])) in valid, f"not a valid Bedrock state: {name} {states}"
+            seen_palette.add(name)
+            pal.append(lookup[(name, states)])
+        pos += 4 + buf.tell()
+        layers.append((idx, pal))
+    assert pos == len(value), "bytes left over after the block layers"
+    idx, pal = layers[0]
     got = np.array(pal)[idx].reshape(16, 16, 16).transpose(2, 1, 0)   # x, z, y -> y, z, x
     s = y_index - bedrock.MIN_SECTION
     want = vol[s * 16:(s + 1) * 16, (cz + offset) * 16:(cz + offset + 1) * 16, (cx + offset) * 16:(cx + offset + 1) * 16]
     # the volume's block numbers can differ from the decoded ones only where two of ours share a Bedrock state
     same = np.array([entries[a] == entries[b] for a, b in zip(got.ravel(), want.ravel())]).reshape(got.shape)
     wrong += int((~same).sum())
+    # the second layer: water exactly in the cells of seagrass and kelp, nothing anywhere else
+    wet_want = np.isin(want, list(p.UNDERWATER_PLANTS))
+    if len(layers) > 1:
+        idx1, pal1 = layers[1]
+        got1 = np.array(pal1)[idx1].reshape(16, 16, 16).transpose(2, 1, 0)
+        wrong += int(((got1 == p.WATER) != wet_want).sum()) + int((~np.isin(got1, (p.AIR, p.WATER))).sum())
+        wet_sections += 1
+    else:
+        wrong += int(wet_want.sum())
     checked += 4096
     chunks.add((cx, cz))
 expected_chunks = (size // 16) ** 2
@@ -102,6 +118,7 @@ nonempty = sum(1 for s in range(vol.shape[0] // 16) for cz in range(size // 16) 
 subchunks = sum(1 for k in db if len(k) == 10 and k[8] == 47)
 print(f"sub-chunks: {subchunks} (expected {nonempty}), blocks compared: {checked}, wrong: {wrong}")
 print(f"palette entries all valid Bedrock 1.21 states; {len(seen_palette)} different blocks used")
+print(f"sub-chunks with water in a second layer (around seagrass and kelp): {wet_sections}")
 assert wrong == 0 and subchunks == nonempty
 
 # 3. the other chunk records, and the heights and biomes

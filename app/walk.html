@@ -14,18 +14,21 @@
   #cross::after { top: 8px; left: 0; width: 18px; height: 2px; }
   #hud { position: fixed; left: 8px; top: 6px; color: #fff; text-shadow: 1px 1px 0 #3f3f3f; font: 13px/1.5 monospace;
          pointer-events: none; white-space: pre; }
-  #start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  #start { position: fixed; inset: 0; display: flex; overflow-y: auto; padding: 10px;
            background: rgba(20, 24, 28, .62); color: #f0f0f0; }
-  #start .box { background: rgba(30, 34, 38, .94); border: 2px solid #5b5b5b; padding: 22px 26px; max-width: 460px;
+  #start .box { margin: auto; background: rgba(30, 34, 38, .94); border: 2px solid #5b5b5b; padding: 22px 26px; max-width: 460px;
                 border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.4); }
   #start h1 { margin: 0 0 4px; font-size: 22px; }
   #start .sub { color: #b9c2c9; margin-bottom: 14px; }
   #start button { width: 100%; margin-top: 14px; padding: 11px; font-size: 17px; background: #6fa63e; color: #fff;
                   border: 0; border-bottom: 4px solid #4f7d27; border-radius: 3px; cursor: pointer; }
+  #start button.small { width: auto; margin-top: 10px; padding: 7px 14px; font-size: 14px; background: #34495e; }
   #start button:disabled { background: #666; border-color: #444; cursor: default; }
   #start table { border-collapse: collapse; width: 100%; color: #dfe4e8; }
   #start td { padding: 2px 0; }
   #start td:first-child { color: #ffd479; width: 42%; font-family: monospace; }
+  @media (max-height: 560px) {                 /* a phone on its side, a small window: room for the buttons */
+    #start #keys { display: none; } #start .box { padding: 12px 18px; } #start .sub { margin-bottom: 4px; } }
   #status { margin-top: 10px; color: #b9c2c9; font-size: 13px; min-height: 18px; }
   #credit { position: fixed; right: 8px; bottom: 6px; color: rgba(255,255,255,.85); font-size: 11px; text-shadow: 1px 1px 0 #333;
             pointer-events: none; }
@@ -44,7 +47,7 @@
 <div id="hud"></div>
 <div id="credit"></div>
 <div id="stick" class="touch"><div id="knob"></div></div>
-<div id="buttons" class="touch"><div id="tSpeed">×1</div><div id="tFly">fly</div><div id="tDown">▼</div><div id="tJump">▲</div></div>
+<div id="buttons" class="touch"><div id="tMusic">♪</div><div id="tSpeed">×1</div><div id="tFly">fly</div><div id="tDown">▼</div><div id="tJump">▲</div></div>
 <div id="start"><div class="box">
   <h1 id="title">Loading…</h1>
   <div class="sub" id="subtitle">A real place, built block by block.</div>
@@ -58,11 +61,13 @@
     <tr><td>1 2 3 4</td><td>speed: normal, ×2, ×4, ×8</td></tr>
     <tr><td>T</td><td>time of day: morning, midday, afternoon, sunset, night</td></tr>
     <tr><td>G</td><td>shaders: sun and shadows, sun only, plain Minecraft</td></tr>
+    <tr><td>M</td><td>music on / off; N: play your own music file</td></tr>
     <tr><td>J</td><td>auto-jump on / off (on)</td></tr>
     <tr><td>R</td><td>back to the start</td></tr>
     <tr><td>Esc</td><td>pause</td></tr>
   </table>
   <button id="go" disabled>Loading…</button>
+  <div><button id="own" class="small">♪ Play your own music</button><input id="ownFile" type="file" accept="audio/*" hidden></div>
   <div id="status"></div>
 </div></div>
 
@@ -97,6 +102,8 @@ class World {
       this.leaves[i] = b.leaves ? 1 : 0; this.glow[i] = b.glow ? 1 : 0; this.alpha[i] = b.translucent || 0;
       this.solidCube[i] = b.cube && b.opaque ? 1 : 0;
     });
+    this.wet = new Uint8Array(N);                // full of water: water itself, and seagrass and kelp
+    B.forEach((b, i) => { this.wet[i] = b.name === "water" || b.wet ? 1 : 0; });
     this.boxes = B.map(b => b.boxes); this.collide = B.map(b => b.collide);
     this.water = B.findIndex(b => b.name === "water");
     this.ground = Math.max(1, B.findIndex(b => b.name === "bedrock"));
@@ -226,7 +233,7 @@ function buildChunk(world, cx, cz) {
 
   const info = world.info, LM = info.lightmap, SH = info.faceShade, AO = info.aoLevels;
   const solidCube = world.solidCube, cube = world.cube, inv = world.invisible, leaves = world.leaves;
-  const alpha = world.alpha, crossB = world.cross, boxes = world.boxes, water = world.water;
+  const alpha = world.alpha, crossB = world.cross, boxes = world.boxes, water = world.water, wet = world.wet;
   const opq = [], tra = [];
   const blockAt = (x, y, z) => (y < 0 ? world.ground : y >= H ? 0 : blk[at(x, y, z)]);
   const lightAt = (x, y, z) => (y < 0 ? 0 : y >= H ? 15 : L[at(x, y, z)]);
@@ -240,18 +247,20 @@ function buildChunk(world, cx, cz) {
   }
   const kindOf = b => (b === water ? 1 : glow[b] ? 4 : leaves[b] ? 2 : crossB[b] ? 3 : 0);
   for (let y = 0; y <= yMax; y++) for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
-    const x = lx + 16, z = lz + 16, b = blk[at(x, y, z)];
-    if (!b || inv[b]) continue;
+    const x = lx + 16, z = lz + 16, b0 = blk[at(x, y, z)];
+    if (!b0 || inv[b0]) continue;
+    // a plant full of water (seagrass, kelp) is drawn twice: the water in its cell, then the plant
+    for (const b of (wet[b0] && b0 !== water ? [water, b0] : [b0])) {
     const wx = cx * 16 + lx, wz = cz * 16 + lz, a = alpha[b], out = a > 0 ? tra : opq;
     if (cube[b]) {
       let height = 1;
-      if (b === water && blockAt(x, y + 1, z) !== water) height = 0.875;
+      if (b === water && !wet[blockAt(x, y + 1, z)]) height = 0.875;
       for (let f = 0; f < 6; f++) {
         const n = FACES[f].n, nx = x + n[0], ny = y + n[1], nz = z + n[2];
         if (ny < 0) continue;
         const nb = blockAt(nx, ny, nz);
         if (solidCube[nb]) continue;
-        if (a > 0 && nb === b) continue;
+        if (a > 0 && (nb === b || (b === water && wet[nb]))) continue;
         if (b === water && f === 0 && height === 1) continue;
         const layer = 2 * b + (f < 2 ? 0 : 1);
         const pts = [], uvs = [], bright = [], aos = [], ext = [];
@@ -306,6 +315,7 @@ function buildChunk(world, cx, cz) {
         quad(out, pts, uvs, layer, [br, br, br, br], a, false, ext, nk);
         quad(out, [pts[1], pts[0], pts[3], pts[2]], uvs, layer, [br, br, br, br], a, false, ext, nk);
       }
+    }
     }
   }
   return { opaque: new Float32Array(opq), translucent: new Float32Array(tra) };
@@ -634,6 +644,232 @@ async function main() {
   }
   const clock = h => `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60) % 60).padStart(2, "0")}`;
 
+  // ---------------------------------------------------------------- sound: footsteps, music, birds, crickets, wind
+  // Everything is made here with the Web Audio API: no sound files. The piano music is original and different
+  // each time. "Play your own music" plays a file from your own device; nothing is uploaded anywhere.
+  const sound = { ctx: null, steps: 0, notes: 0, chirps: 0, music: true, own: null, ownName: "" };
+  const blockNames = info.blocks.map(b => b.name);
+  function materialOf(b) {
+    const n = blockNames[b] || "";
+    if (b === world.water) return "water";
+    if (/sand/.test(n)) return "sand";
+    if (/gravel/.test(n)) return "gravel";
+    if (/snow/.test(n)) return "snow";
+    if (/grass|leaves|dirt|podzol|moss|farmland|hay/.test(n)) return "grass";
+    if (/plank|log|wood|bookshelf|spruce_|oak_|birch_|acacia_|jungle_/.test(n)) return "wood";
+    return "stone";
+  }
+  function startSound() {
+    if (sound.ctx) { sound.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = sound.ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();               // keeps loud moments from clipping
+    comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(ctx.destination);
+    sound.muffle = ctx.createBiquadFilter(); sound.muffle.type = "lowpass"; sound.muffle.frequency.value = 20000;
+    sound.muffle.connect(comp);                                 // everything sounds dull with your head under water
+    sound.master = ctx.createGain(); sound.master.gain.value = 1.6; sound.master.connect(sound.muffle);
+    sound.sfx = ctx.createGain(); sound.sfx.gain.value = 0.7; sound.sfx.connect(sound.master);
+    sound.musicGain = ctx.createGain(); sound.musicGain.gain.value = 0.32; sound.musicGain.connect(sound.master);
+    // a room: reverb from a burst of fading noise
+    const len = Math.floor(ctx.sampleRate * 3.2), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    sound.reverb = ctx.createConvolver(); sound.reverb.buffer = ir;
+    sound.reverbIn = ctx.createGain(); sound.reverbIn.gain.value = 0.55;
+    sound.reverbIn.connect(sound.reverb); sound.reverb.connect(sound.master);
+    const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    sound.noise = nb;
+    // wind: louder the higher you are above the ground
+    const wind = ctx.createBufferSource(); wind.buffer = nb; wind.loop = true; wind.playbackRate.value = 0.35;
+    const wl = ctx.createBiquadFilter(); wl.type = "lowpass"; wl.frequency.value = 380;
+    sound.wind = ctx.createGain(); sound.wind.gain.value = 0;
+    wind.connect(wl); wl.connect(sound.wind); sound.wind.connect(sound.sfx); wind.start();
+    // water: waves that rise and fall, louder the more water there is around you
+    const surf = ctx.createBufferSource(); surf.buffer = nb; surf.loop = true; surf.playbackRate.value = 0.6;
+    const sf = ctx.createBiquadFilter(); sf.type = "lowpass"; sf.frequency.value = 900;
+    const swell = ctx.createGain(); swell.gain.value = 0.6;
+    const lfo = ctx.createOscillator(), depth = ctx.createGain();
+    lfo.frequency.value = 0.11; depth.gain.value = 0.45; lfo.connect(depth); depth.connect(swell.gain);
+    sound.water = ctx.createGain(); sound.water.gain.value = 0;
+    surf.connect(sf); sf.connect(swell); swell.connect(sound.water); sound.water.connect(sound.sfx);
+    surf.start(); lfo.start();
+    sound.nextLook = 0;
+    sound.nextNote = ctx.currentTime + 1.5;
+    sound.nextBird = ctx.currentTime + 3;
+    setInterval(schedule, 200);
+  }
+  function burst(t, dur, gain, filters, rate = 1, pan = 0) {    // a short burst of shaped noise: one footstep
+    const ctx = sound.ctx, src = ctx.createBufferSource();
+    src.buffer = sound.noise; src.playbackRate.value = rate;
+    let node = src;
+    for (const [type, f, q] of filters) {
+      const bq = ctx.createBiquadFilter(); bq.type = type; bq.frequency.value = f; bq.Q.value = q || 0.7;
+      node.connect(bq); node = bq;
+    }
+    const g = ctx.createGain(), p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    node.connect(g);
+    if (p) { p.pan.value = pan; g.connect(p); p.connect(sound.sfx); } else g.connect(sound.sfx);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  function thud(t, f, gain, dur) {
+    const ctx = sound.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + dur);
+    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(sound.sfx); o.start(t); o.stop(t + dur + 0.02);
+  }
+  let stepSide = 1;
+  function footstep(material, loud = 1) {
+    if (!sound.ctx) return;
+    const t = sound.ctx.currentTime + 0.01, r = 0.85 + Math.random() * 0.3, pan = (stepSide = -stepSide) * 0.12;
+    const j = f => f * (0.85 + Math.random() * 0.3);
+    if (material === "grass") burst(t, 0.13, 0.4 * loud, [["bandpass", j(900), 0.6], ["lowpass", 2600]], r, pan);
+    else if (material === "sand") burst(t, 0.19, 0.28 * loud, [["bandpass", j(2400), 0.5]], r * 0.9, pan);
+    else if (material === "snow") burst(t, 0.2, 0.32 * loud, [["lowpass", j(1400)]], r * 0.8, pan);
+    else if (material === "gravel") {
+      burst(t, 0.07, 0.35 * loud, [["highpass", j(1400)], ["peaking", 3000, 1]], r, pan);
+      burst(t + 0.035, 0.08, 0.3 * loud, [["highpass", j(1600)]], r, pan);
+    } else if (material === "wood") {
+      burst(t, 0.07, 0.3 * loud, [["bandpass", j(520), 2]], r, pan); thud(t, j(130), 0.35 * loud, 0.08);
+    } else if (material === "water") burst(t, 0.28, 0.3 * loud, [["lowpass", j(900)], ["bandpass", 600, 0.8]], r * 0.7, pan);
+    else { burst(t, 0.06, 0.38 * loud, [["highpass", j(1100)], ["bandpass", j(3000), 1.4]], r, pan); thud(t, j(170), 0.18 * loud, 0.04); }
+    sound.steps++;
+  }
+  // a soft piano note: a few partials that fade at different speeds, through the reverb
+  function pianoNote(t, midi, vel) {
+    const ctx = sound.ctx, f = 440 * Math.pow(2, (midi - 69) / 12);
+    const out = ctx.createGain(); out.gain.value = vel;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass";
+    lp.frequency.setValueAtTime(2800 + midi * 20, t); lp.frequency.exponentialRampToValueAtTime(700, t + 2.5);
+    lp.connect(out); out.connect(sound.musicGain); out.connect(sound.reverbIn);
+    [[1, 1, 3.6], [2.002, 0.32, 2.2], [3.003, 0.12, 1.4], [4.01, 0.05, 0.9]].forEach(([mult, amp, decay]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = mult === 1 ? "triangle" : "sine"; o.frequency.value = f * mult;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(amp, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+      o.connect(g); g.connect(lp); o.start(t); o.stop(t + decay + 0.05);
+    });
+    sound.notes++;
+  }
+  // the music: gentle phrases over a slow chord walk, then a long rest, made new every time
+  const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];          // a major pentatonic over two octaves
+  let key = [50, 53, 55, 57, 48][Math.floor(Math.random() * 5)], phrase = [];
+  function newPhrase() {
+    const roots = [0, 9, 5, 7, 2, 4];
+    const chords = Array.from({ length: 4 }, () => roots[Math.floor(Math.random() * roots.length)]);
+    chords[0] = 0;
+    const notes = [];
+    let beat = 0, idx = 4 + Math.floor(Math.random() * 3);
+    const spb = 60 / (60 + Math.random() * 12);                 // seconds per beat: slow
+    chords.forEach((root, c) => {
+      notes.push({ at: beat * spb, midi: key - 12 + root, vel: 0.22 });           // a low note for the chord
+      notes.push({ at: (beat + 0.5) * spb, midi: key + root + 7, vel: 0.1 });
+      let b = 0;
+      while (b < 8) {                                             // two bars of melody over each chord
+        idx = Math.max(0, Math.min(SCALE.length - 1, idx + [-2, -1, -1, 1, 1, 2, 0][Math.floor(Math.random() * 7)]));
+        if (Math.random() < 0.82) notes.push({ at: (beat + b) * spb, midi: key + 12 + SCALE[idx], vel: 0.16 + Math.random() * 0.12 });
+        b += [1, 1, 2, 2, 1.5, 3][Math.floor(Math.random() * 6)];
+      }
+      beat += 8;
+    });
+    if (Math.random() < 0.25) key = [50, 53, 55, 57, 48][Math.floor(Math.random() * 5)];
+    return { notes, length: beat * spb };
+  }
+  function schedule() {
+    const ctx = sound.ctx;
+    if (!ctx || ctx.state !== "running") return;
+    const now = ctx.currentTime, L = lighting();
+    if (sound.music && !sound.own && now + 1 > sound.nextNote) {   // the next phrase, quieter and lower at night
+      const ph = newPhrase(), start = Math.max(now + 0.1, sound.nextNote);
+      for (const n of ph.notes) pianoNote(start + n.at, n.midi - (L.night > 0.5 ? 12 : 0), n.vel * (L.night > 0.5 ? 0.7 : 1));
+      sound.nextNote = start + ph.length + 8 + Math.random() * 14;   // and then a rest, like the game's music
+    }
+    const isNight = L.night > 0.5;
+    if (isNight !== sound.wasNight) { sound.wasNight = isNight; sound.nextBird = now + 0.4; }   // time changed (T)
+    if (now > sound.nextBird) {
+      if (L.night > 0.5) {                                        // crickets at night
+        const f = 4300 + Math.random() * 600;
+        for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) chirp(now + i * 0.045, f, f, 0.012, 0.018, 0.5);
+        sound.nextBird = now + 0.3 + Math.random() * 1.2;
+      } else if (L.day > 0.4) {                                   // birds by day
+        const f = 2400 + Math.random() * 2400, pan = Math.random() * 1.6 - 0.8, n = 2 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < n; i++) chirp(now + i * (0.11 + Math.random() * 0.05), f * (1 + i * 0.03), f * (1.25 + Math.random() * 0.3), 0.06, 0.03, pan);
+        sound.nextBird = now + 3 + Math.random() * 9;
+      } else sound.nextBird = now + 2;
+    }
+  }
+  function chirp(t, f0, f1, dur, gain, pan) {
+    const ctx = sound.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + dur * 0.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; g.connect(p); p.connect(sound.reverbIn); p.connect(sound.sfx); }
+    else g.connect(sound.sfx);
+    o.start(t); o.stop(t + dur + 0.02);
+    sound.chirps++;
+  }
+  function toggleMusic() {
+    sound.music = !sound.music;
+    if (sound.own) { if (sound.music) sound.own.play(); else sound.own.pause(); }
+    if (sound.musicGain) sound.musicGain.gain.setTargetAtTime(sound.music ? 0.32 : 0, sound.ctx.currentTime, 0.3);
+  }
+  function chooseOwnMusic() { $("ownFile").click(); }
+  $("own").onclick = chooseOwnMusic;
+  $("ownFile").onchange = e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (sound.own) { sound.own.pause(); URL.revokeObjectURL(sound.own.src); }
+    sound.own = new Audio(URL.createObjectURL(file));          // played from your own device
+    sound.own.loop = true; sound.own.volume = 0.6; sound.ownName = file.name.replace(/\.[^.]+$/, "");
+    sound.music = true;
+    startSound();
+    if (sound.musicGain) sound.musicGain.gain.value = 0.32;
+    sound.own.play().catch(() => {});
+    $("own").textContent = "♪ " + sound.ownName;
+  };
+  let walked = 0, wasOnGround = true, fallSpeed = 0;
+  function soundUpdate(dt) {                                       // called with the player's movement
+    const p = player;
+    if (!sound.ctx) return;
+    const under = world.get(Math.floor(p.x), Math.floor(p.y - 0.2), Math.floor(p.z));
+    const inWater = world.wet[world.get(Math.floor(p.x), Math.floor(p.y + 0.4), Math.floor(p.z))] === 1;
+    if (p.onGround && !p.fly) {
+      walked += Math.hypot(p.vx, p.vz) * dt;
+      if (walked > (p.sprint ? 2.0 : 1.65)) { walked = 0; footstep(materialOf(under)); }
+      if (!wasOnGround && fallSpeed < -9) footstep(materialOf(under), 1.6);   // landing
+    } else if (inWater && Math.hypot(p.vx, p.vz) > 1) {
+      walked += Math.hypot(p.vx, p.vz) * dt;
+      if (walked > 2.2) { walked = 0; footstep("water"); }
+    }
+    wasOnGround = p.onGround; fallSpeed = p.vy < fallSpeed ? p.vy : p.onGround ? 0 : fallSpeed;
+    let ground = 0;                                                // how high above the ground: wind
+    for (let y = Math.floor(p.y); y > Math.floor(p.y) - 40 && y >= 0; y--) {
+      if (world.get(Math.floor(p.x), y, Math.floor(p.z))) break;
+      ground++;
+    }
+    const now = sound.ctx.currentTime;
+    const target = Math.min(0.12, ground * 0.003 + (p.fly ? Math.hypot(p.vx, p.vz) * 0.002 : 0));
+    sound.wind.gain.setTargetAtTime(target, now, 0.5);
+    if (now > sound.nextLook) {                                    // twice a second: how much water is near
+      sound.nextLook = now + 0.5;
+      let wetCells = 0;
+      const px = Math.floor(p.x), py = Math.floor(p.y), pz = Math.floor(p.z);
+      for (let dz = -16; dz <= 16; dz += 2) for (let dx = -16; dx <= 16; dx += 2)
+        for (let dy = -6; dy <= 1; dy++) if (world.wet[world.get(px + dx, py + dy, pz + dz)]) { wetCells++; break; }
+      sound.waterNear = wetCells / 289;
+      sound.water.gain.setTargetAtTime(Math.min(0.2, sound.waterNear * 0.35), now, 0.8);
+      const under = world.wet[world.get(px, Math.floor(p.y + 1.5), pz)];
+      sound.muffle.frequency.setTargetAtTime(under ? 500 : 20000, now, 0.1);
+    }
+  }
+
   // ---------------------------------------------------------------- the player
   const S = info.spawn;
   const player = { x: S[0], y: S[1], z: S[2], vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.05, onGround: false, fly: false, sprint: false };
@@ -708,7 +944,7 @@ async function main() {
     const up = keys.has("Space") || touch.up, down = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.down;
     if (p.fly) p.vy = ((up ? 8 : 0) - (down ? 8 : 0)) * Math.sqrt(SPEEDS[speedLevel]);
     else {
-      const inWater = world.get(Math.floor(p.x), Math.floor(p.y + 0.4), Math.floor(p.z)) === world.water;
+      const inWater = world.wet[world.get(Math.floor(p.x), Math.floor(p.y + 0.4), Math.floor(p.z))] === 1;
       p.vy -= (inWater ? 8 : 28) * dt;
       p.vy = Math.max(p.vy, inWater ? -3 : -60);
       if (up && (p.onGround || inWater)) p.vy = inWater ? 3 : 8.4;
@@ -735,6 +971,7 @@ async function main() {
     if (blockedY) p.vy = 0;
     if (p.onGround && p.fly) p.fly = false;
     if (p.y < -8) respawn();
+    soundUpdate(dt);
   }
 
   // ---------------------------------------------------------------- input
@@ -748,6 +985,8 @@ async function main() {
     if (e.code === "KeyF") player.fly = !player.fly;
     if (e.code === "KeyR") respawn();
     if (e.code === "KeyJ") autoJump = !autoJump;
+    if (e.code === "KeyM") toggleMusic();
+    if (e.code === "KeyN") { if (document.pointerLockElement) document.exitPointerLock(); chooseOwnMusic(); }
     if (e.code === "KeyT") { timeIndex = (timeIndex + 1) % TIMES.length; shadowDirty = true; }
     if (e.code === "KeyG") { shaderLevel = (shaderLevel + 2) % 3; shadowDirty = true; }
     if (/^Digit[1-4]$/.test(e.code)) speedLevel = Number(e.code.slice(5)) - 1;
@@ -777,6 +1016,7 @@ async function main() {
   }
   document.addEventListener("pointerlockerror", () => { dragLook = true; });
   function play() {
+    startSound();
     playing = true;
     $("start").style.display = "none";
     $("cross").style.display = "block";
@@ -830,6 +1070,8 @@ async function main() {
     hold("tJump", "up"); hold("tDown", "down");
     $("tSpeed").addEventListener("touchstart", e => { speedLevel = (speedLevel + 1) % 4; $("tSpeed").textContent = "×" + SPEEDS[speedLevel]; e.preventDefault(); }, { passive: false });
     $("tFly").addEventListener("touchstart", e => { player.fly = !player.fly; e.preventDefault(); }, { passive: false });
+    $("tMusic").addEventListener("touchstart", e => { toggleMusic(); $("tMusic").style.opacity = sound.music ? 1 : 0.4;
+                                                       e.preventDefault(); }, { passive: false });
   }
 
   // ---------------------------------------------------------------- drawing
@@ -925,6 +1167,10 @@ async function main() {
     const aspect = canvas.width / canvas.height, fov = 70 * Math.PI / 180, dist = renderDistance * 16;
     const mvp = mul(perspective(fov, aspect, 0.05, dist + 64), viewMatrix(eye, r, u, f));
     const L = lighting(), shade = shaderLevel > 0 ? 1 : 0, shadows = shaderLevel === 2 && shadowOk, t = now / 1000;
+    // head under water: the world fades into blue-green a few blocks away, like the game
+    const under = world.wet[world.get(Math.floor(eye[0]), Math.floor(eye[1]), Math.floor(eye[2]))] === 1;
+    const deep = [0.03 + 0.07 * L.day, 0.08 + 0.2 * L.day, 0.14 + 0.3 * L.day];
+    const skyLow = under ? deep : L.horizon, skyHigh = under ? deep : L.zenith;
     if (shadows) renderShadows(L, now);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -933,9 +1179,9 @@ async function main() {
     gl.depthMask(false);
     gl.uniform3fv(sloc("uRight"), r); gl.uniform3fv(sloc("uUp"), u); gl.uniform3fv(sloc("uFwd"), f);
     gl.uniform2f(sloc("uTan"), Math.tan(fov / 2) * aspect, Math.tan(fov / 2));
-    gl.uniform3fv(sloc("uCam"), eye); gl.uniform3fv(sloc("uZenith"), L.zenith); gl.uniform3fv(sloc("uHorizon"), L.horizon);
-    gl.uniform1f(sloc("uCloudY"), 192 - info.yMin);
-    gl.uniform1f(sloc("uShade"), shade); gl.uniform3fv(sloc("uSunDir"), L.sunDir); gl.uniform3fv(sloc("uSunCol"), L.sunCol);
+    gl.uniform3fv(sloc("uCam"), eye); gl.uniform3fv(sloc("uZenith"), skyHigh); gl.uniform3fv(sloc("uHorizon"), skyLow);
+    gl.uniform1f(sloc("uCloudY"), under ? 1e7 : 192 - info.yMin);
+    gl.uniform1f(sloc("uShade"), under ? 0 : shade); gl.uniform3fv(sloc("uSunDir"), L.sunDir); gl.uniform3fv(sloc("uSunCol"), L.sunCol);
     gl.uniform1f(sloc("uNight"), L.night); gl.uniform3fv(sloc("uMoonDir"), L.moonDir);
     gl.uniform2f(sloc("uRes"), canvas.width, canvas.height); gl.uniform1f(sloc("uTime"), t);
     gl.bindVertexArray(skyVao);
@@ -945,14 +1191,15 @@ async function main() {
     gl.useProgram(prog);
     gl.uniformMatrix4fv(loc("uMVP"), false, new Float32Array(mvp));
     gl.uniform3fv(loc("uCam"), eye);
-    gl.uniform3fv(loc("uFog"), L.horizon);
-    gl.uniform2f(loc("uFogRange"), dist - Math.min(Math.max(dist / 10, 4), 64), dist);
+    gl.uniform3fv(loc("uFog"), skyLow);
+    if (under) gl.uniform2f(loc("uFogRange"), 2, 26);
+    else gl.uniform2f(loc("uFogRange"), dist - Math.min(Math.max(dist / 10, 4), 64), dist);
     gl.uniform1f(loc("uTime"), t); gl.uniform1f(loc("uWave"), shade);
     gl.uniform1f(loc("uShade"), shade); gl.uniform1f(loc("uShadowOn"), shadows ? 1 : 0);
     gl.uniformMatrix4fv(loc("uShadowMVP"), false, new Float32Array(shadowMVP));
     gl.uniform3fv(loc("uShadowCentre"), shadowCentre.map(v => v || 0)); gl.uniform1f(loc("uShadowRange"), SHADOW_RANGE);
     gl.uniform3fv(loc("uSunDir"), L.sunDir); gl.uniform3fv(loc("uSunCol"), L.sunCol); gl.uniform3fv(loc("uAmb"), L.amb);
-    gl.uniform3fv(loc("uZenith"), L.zenith); gl.uniform3fv(loc("uHorizon"), L.horizon);
+    gl.uniform3fv(loc("uZenith"), skyHigh); gl.uniform3fv(loc("uHorizon"), skyLow);
     gl.uniform1f(loc("uDay"), L.day); gl.uniform1f(loc("uNight"), L.night);
     gl.uniform2f(loc("uRes"), canvas.width, canvas.height);
     gl.uniform1i(loc("uTex"), 0); gl.uniform1i(loc("uShadow"), 1);
@@ -982,11 +1229,12 @@ async function main() {
       `Facing: ${facing}${p.fly ? "   (flying)" : p.sprint ? "   (sprinting)" : ""}${autoJump ? "" : "   auto-jump off"}` +
       `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps` +
       `\nTime: ${TIMES[timeIndex][0]} (${clock(L.hour)} sun time, the real sun for this place today)   ` +
-      `Shaders: ${["off (plain Minecraft)", "sun", "sun and shadows"][shaderLevel]}`;
+      `Shaders: ${["off (plain Minecraft)", "sun", "sun and shadows"][shaderLevel]}` +
+      `\nMusic: ${!sound.music ? "off" : sound.own ? sound.ownName : "place2mc piano"} (M)`;
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt,      // for tests
+  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt, sound,      // for tests
                     buildAll: () => { let n = 0; while (buildSome(2000)) n++; return n; },
                     setTime: i => { timeIndex = i; shadowDirty = true; }, setShaders: i => { shaderLevel = i; shadowDirty = true; } };
 }

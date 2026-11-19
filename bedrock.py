@@ -229,13 +229,25 @@ def bits_for(count):
     return 16
 
 
+# blocks that are always full of water (seagrass, kelp): Bedrock keeps their water in a second block layer
+WET = np.zeros(256, dtype=bool)
+WET[list(p.UNDERWATER_PLANTS)] = True
+
+
 def encode_subchunk(section, y_index, palette_bytes):
-    """section: block numbers [16 y, 16 z, 16 x]; Bedrock wants them in x, z, y order."""
+    """section: block numbers [16 y, 16 z, 16 x]; Bedrock wants them in x, z, y order. Layer 0 holds the blocks;
+    where some are full of water a layer 1 holds that water (air everywhere else), as the game stores it."""
     xzy = np.ascontiguousarray(section.transpose(2, 1, 0)).ravel()
     used, index = np.unique(xzy, return_inverse=True)
     bits = bits_for(len(used))
-    return (bytes([9, 1, y_index & 0xFF, bits << 1]) + pack_words(index, bits)
-            + struct.pack("<I", len(used)) + b"".join(palette_bytes[int(b)] for b in used))
+    layer0 = (bytes([bits << 1]) + pack_words(index, bits)
+              + struct.pack("<I", len(used)) + b"".join(palette_bytes[int(b)] for b in used))
+    wet = WET[xzy]
+    if not wet.any():
+        return bytes([9, 1, y_index & 0xFF]) + layer0
+    layer1 = (bytes([1 << 1]) + pack_words(wet.astype(np.uint32), 1)
+              + struct.pack("<I", 2) + palette_bytes[p.AIR] + palette_bytes[p.WATER])
+    return bytes([9, 2, y_index & 0xFF]) + layer0 + layer1
 
 
 def data3d(column, biomes):

@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.3"
+VERSION = "1.4"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -134,6 +134,13 @@ TREES = [
     (block("jungle_log"), block("jungle_leaves", persistent="true")),
 ]
 DEAD_BUSH = block("dead_bush")
+# life under water. The game counts these as always full of water (Java: no waterlogged property needed; Bedrock:
+# bedrock.py puts water in the second block layer of their cells, or the plants break)
+SEAGRASS = block("seagrass")
+TALL_SEAGRASS = (block("tall_seagrass", half="lower"), block("tall_seagrass", half="upper"))
+KELP = block("kelp", age="25")                    # the top of a kelp stalk, fully grown so it stays as built
+KELP_PLANT = block("kelp_plant")
+UNDERWATER_PLANTS = (SEAGRASS, *TALL_SEAGRASS, KELP, KELP_PLANT)
 
 # ---------------------------------------------------------------------------------------------- climate
 # Every place gets the biome, grass colour, bare ground and trees of its climate, from the Köppen-Geiger map of
@@ -1463,10 +1470,23 @@ def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_tr
         if railway:
             mid = np.abs(across) < 0.75
             rail_deck[cz[:, mid], cx[:, mid]] = True
-        for side in (-1, 1):                                     # the walls along both edges
-            ex = np.clip((p[:, 0] + nrm[:, 0] * side * (half + 1)).astype(int), 0, size - 1)
-            ez = np.clip((p[:, 1] + nrm[:, 1] * side * (half + 1)).astype(int), 0, size - 1)
-            edge[ez, ex] = np.maximum(edge[ez, ex], h)
+        # the walls: every cell around this deck, at the height of the deck next to it, but not across the two
+        # ends (a wall block joins only the blocks at its sides, so on a diagonal bridge it takes the corner cells too)
+        zlo, xlo = max(int(cz.min()) - 1, 0), max(int(cx.min()) - 1, 0)
+        zhi, xhi = min(int(cz.max()) + 2, size), min(int(cx.max()) + 2, size)
+        kmap = np.full((zhi - zlo, xhi - xlo), -1, dtype=np.int32)      # which sample made each deck cell
+        kmap[cz - zlo, cx - xlo] = np.broadcast_to(np.arange(len(h))[:, None], cz.shape)
+        pad, (H, W) = np.pad(kmap, 1, constant_values=-1), kmap.shape
+        near = np.full(kmap.shape, -1, dtype=np.int32)
+        for dz in (-1, 0, 1):                                    # sides and corners: a diagonal outline
+            for dx in (-1, 0, 1):                                # then joins up side to side
+                near = np.maximum(near, pad[1 + dz:1 + dz + H, 1 + dx:1 + dx + W])
+        zz, xx = np.nonzero((kmap < 0) & (near >= 0))
+        k = near[zz, xx]
+        along = s_at[k] + (xx + xlo + 0.5 - p[k, 0]) * d[k, 0] + (zz + zlo + 0.5 - p[k, 1]) * d[k, 1]
+        keep = (along > s_at[0] + 0.5) & (along < s_at[-1] - 0.5)
+        ez, ex = zz[keep] + zlo, xx[keep] + xlo
+        np.maximum.at(edge, (ez, ex), h[k[keep]])
         for k in range(0, len(h), 24):                           # pillars every 12 blocks, at both edges
             if h[k] - below[k] < 3:
                 continue
@@ -1602,6 +1622,31 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     for d in range(1, int((level - bed)[water].max()) + 1 if water.any() else 0):
         m = water & (bed + d <= level)
         vol[(bed + d)[m], zz[m], xx[m]] = WATER
+    # seagrass and tall seagrass on the bed, and kelp reaching up to just under the surface; none in frozen seas
+    # (as in the game), none on the outer ring, next to the void
+    kind = CLIMATE.get("kind")
+    water_life = {"seagrass": 0, "kelp": 0}
+    if water.any() and kind != "polar":
+        life = np.random.default_rng(seed + 101)
+        r = life.random((size, size))
+        depth = np.where(water, level - bed, 0)
+        inner = np.zeros((size, size), dtype=bool)
+        inner[3:-3, 3:-3] = True
+        inner &= water
+        grass_m = inner & (depth >= 2) & (r < 0.26)
+        tall_m = inner & (depth >= 3) & (r >= 0.26) & (r < 0.33)
+        # kelp forests grow in cool seas (North Sea, Pacific coasts); warm seas have seagrass meadows instead
+        forest = {"temperate": 1, "continental": 1, "boreal": 0.8, "highland": 0.5, "mediterranean": 0.2,
+                  "steppe": 0.2, "desert": 0.1}.get(kind, 0)
+        kelp_m = inner & sea & (depth >= 4) & (r >= 0.33) & (r < 0.33 + 0.45 * forest * (patches > 0.6))
+        vol[(bed + 1)[grass_m], zz[grass_m], xx[grass_m]] = SEAGRASS
+        vol[(bed + 1)[tall_m], zz[tall_m], xx[tall_m]] = TALL_SEAGRASS[0]
+        vol[(bed + 2)[tall_m], zz[tall_m], xx[tall_m]] = TALL_SEAGRASS[1]
+        for z, x in zip(*np.nonzero(kelp_m)):
+            top = int(bed[z, x]) + int(life.integers(max(2, int(depth[z, x]) // 3), int(depth[z, x])))   # below the surface
+            vol[int(bed[z, x]) + 1:top, z, x] = KELP_PLANT
+            vol[top, z, x] = KELP
+        water_life = {"seagrass": int(grass_m.sum() + tall_m.sum()), "kelp": int(kelp_m.sum())}
 
     # the world around the built area is empty, so wall in the water on the outermost ring with invisible blocks
     edge = np.zeros((size, size), dtype=bool)
@@ -2046,7 +2091,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
                           "half slabs on slopes": slabs, "rails": rails_laid, "fence, wall and hedge blocks": barrier_cells,
                           "benches": benches, "bushes and flowers by buildings": landscaping,
                           "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals,
-                          "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails}
+                          "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails,
+                          "seagrass": water_life["seagrass"], "kelp stalks": water_life["kelp"]}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -2402,6 +2448,8 @@ def main():
 
     if not (args.place or args.center or args.osm_file):
         args.place = input("Which place? (for example: Needham, Massachusetts) ").strip()
+    file_label = (Path(args.osm_file).name.split(".")[0].replace("_", " ").replace("-", " ").title()
+                  if args.osm_file else None)                    # monaco.osm -> "Monaco"
     if not args.world and not args.preview_only:
         saves = Path(args.saves) if args.saves else saves_folder()
         if args.edition == "bedrock" or (saves is None and args.edition == "both"):
@@ -2409,12 +2457,12 @@ def main():
             saves.mkdir(parents=True, exist_ok=True)
         if saves is None:
             sys.exit("Could not find your Minecraft Java saves folder. Open Minecraft Java once, or give --saves FOLDER.")
-        args.world = str(new_world_folder(saves, args.new_world or args.place or "place2mc world"))
+        args.world = str(new_world_folder(saves, args.new_world or args.place or file_label or "place2mc world"))
         args.creating = True
     else:
         args.creating = False
 
-    elements, bounds, label = None, None, args.new_world or args.place or args.osm_file or args.center
+    elements, bounds, label = None, None, args.new_world or args.place or file_label or args.center
     if args.osm_file:
         print(f"Reading {args.osm_file} ...")
         elements, bounds = load_osm_file(args.osm_file)

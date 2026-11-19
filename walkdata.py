@@ -80,6 +80,7 @@ def block_table():
             "lightCost": int(mcrender.LIGHT_COST[i]),
             "skyStop": bool(mcrender._BLOCKS_SKY_BELOW[i]) and not invisible,
             "glow": bool(mcrender.GLOWING[i]),
+            "wet": bool(mcrender.UNDERWATER[i]),                          # seagrass, kelp: water in the same cell
             "collide": collide,
         })
     return table

@@ -1223,6 +1223,26 @@
 },
 "version": 18168865
 },
+"minecraft:kelp[age=25]": {
+"name": "minecraft:kelp",
+"states": {
+"kelp_age": [
+"int",
+25
+]
+},
+"version": 18168865
+},
+"minecraft:kelp_plant[]": {
+"name": "minecraft:kelp",
+"states": {
+"kelp_age": [
+"int",
+0
+]
+},
+"version": 18168865
+},
 "minecraft:lantern[]": {
 "name": "minecraft:lantern",
 "states": {
@@ -1703,6 +1723,16 @@
 "minecraft:sand[]": {
 "name": "minecraft:sand",
 "states": {},
+"version": 18168865
+},
+"minecraft:seagrass[]": {
+"name": "minecraft:seagrass",
+"states": {
+"sea_grass_type": [
+"string",
+"default"
+]
+},
 "version": 18168865
 },
 "minecraft:smooth_sandstone[]": {
@@ -2494,6 +2524,26 @@
 "upper_block_bit": [
 "byte",
 1
+]
+},
+"version": 18168865
+},
+"minecraft:tall_seagrass[half=lower]": {
+"name": "minecraft:seagrass",
+"states": {
+"sea_grass_type": [
+"string",
+"double_bot"
+]
+},
+"version": 18168865
+},
+"minecraft:tall_seagrass[half=upper]": {
+"name": "minecraft:seagrass",
+"states": {
+"sea_grass_type": [
+"string",
+"double_top"
 ]
 },
 "version": 18168865
