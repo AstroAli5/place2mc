@@ -234,6 +234,7 @@ export async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPer
   const cells = size * size;
   const ground = new Float32Array(cells).fill(Infinity), single = new Float32Array(cells).fill(-Infinity);
   const first = new Float32Array(cells).fill(-Infinity), bclass = new Uint8Array(cells);
+  const echoes = new Uint16Array(cells), singles = new Uint16Array(cells);   // above-ground echoes, and lone ones
   const classes = {}, returns = {};
   let used = 0, read = 0, done = 0;
   const visit = (x, y, z, rn, nr, cls) => {
@@ -248,6 +249,8 @@ export async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPer
     const i = cz * size + cx;
     if (cls === 2 || cls === 9) { if (z < ground[i]) ground[i] = z; return; }   // bare ground and water
     if (cls === 6) bclass[i] = 1;
+    if (cls === 17) return;                               // bridge decks are drawn from the map, not as buildings
+    if (echoes[i] < 65535) { echoes[i]++; if (nr === 1) singles[i]++; }
     if (nr === 1 && z > single[i]) single[i] = z;         // one echo only: a hard surface such as a roof
     if (rn === 1 && z > first[i]) first[i] = z;           // the first echo: the top of whatever is there
   };
@@ -307,18 +310,48 @@ export async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPer
     else roofCodes.push(255);
   }
 
+
+
+  // buildings the map does not have: patches of at least 30 m2, at least 3 m up, where nearly every echo is a lone one
+  // (a hard roof; trees give several echoes per pulse), away from the mapped buildings
+  const hard = new Uint8Array(cells);
+  for (let i = 0; i < cells; i++) {
+    if (grown[i] || !Number.isFinite(single[i]) || single[i] - dtm[i] < 3) continue;
+    if (bclass[i] || (echoes[i] >= 2 && singles[i] >= 0.75 * echoes[i])) hard[i] = 1;
+  }
+  const label = new Int32Array(cells);
+  const stack = [];
+  let nextLabel = 0;
+  const extra = new Uint8Array(cells);
+  for (let s0 = 0; s0 < cells; s0++) {
+    if (!hard[s0] || label[s0]) continue;
+    const members = [];
+    label[s0] = ++nextLabel; stack.push(s0);
+    while (stack.length) {
+      const i = stack.pop(); members.push(i);
+      const z = i / size | 0, x = i % size;
+      for (const [dz, dx] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const zz = z + dz, xx = x + dx, j = zz * size + xx;
+        if (zz >= 0 && xx >= 0 && zz < size && xx < size && hard[j] && !label[j]) { label[j] = nextLabel; stack.push(j); }
+      }
+    }
+    if (members.length >= 30) for (const i of members) extra[i] = 1;
+  }
   // trees: the canopy is everything the first echoes hit above the ground, away from buildings
   const chm = new Float32Array(cells);
   for (let i = 0; i < cells; i++) {
     const z = i / size | 0, x = i % size;
-    let nearBuilding = bclass[i] === 1;
+    let nearBuilding = bclass[i] === 1 || extra[i] === 1;
     for (let dz = -1; dz <= 1 && !nearBuilding; dz++) for (let dx = -1; dx <= 1; dx++) {
       const zz = z + dz, xx = x + dx;
-      if (zz >= 0 && xx >= 0 && zz < size && xx < size && inBuilding[zz * size + xx]) { nearBuilding = true; break; }
+      if (zz >= 0 && xx >= 0 && zz < size && xx < size && (inBuilding[zz * size + xx] || extra[zz * size + xx])) { nearBuilding = true; break; }
     }
     chm[i] = nearBuilding || !Number.isFinite(first[i]) ? 0 : Math.max(0, first[i] - dtm[i]);
   }
   const trees = findTrees(chm, size);
+  const extraCodes = [];
+  let extraCount = 0;
+  for (let i = 0; i < cells; i++) if (extra[i]) { extraCodes.push(Math.max(0, Math.min(254, Math.round((single[i] - dtm[i] + 2) / roofStep)))); extraCount++; }
   log(`${rings.length} buildings, ${measured.toLocaleString()} roof cells measured, ${trees.length.toLocaleString()} trees`);
 
   // pack: the ground every dtmStep metres in centimetres as differences along each row (they stay small, so they
@@ -347,6 +380,13 @@ export async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPer
   }
   runs.push(run);
   const runBytes = new Uint32Array(runs);
+  const extraRuns = [];
+  state = 0; run = 0;
+  for (let i = 0; i < cells; i++) {
+    if (extra[i] !== state) { extraRuns.push(run); run = 0; state = extra[i]; }
+    run++;
+  }
+  extraRuns.push(run);
   const treeInts = new Int16Array(trees.length * 4);
   trees.forEach((t, k) => { for (let j = 0; j < 4; j++) treeInts[4 * k + j] = Math.round(t[j] * 10); });
   const pack = async (arr) => b64(await gzip(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)));
@@ -355,7 +395,9 @@ export async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPer
     dtm: { step: dtmStep, n, low: lo, unit: 0.01, rowDiffInt16: await pack(dtmRows) },
     roofs: { step: roofStep, offset: -2, runsUint32: await pack(runBytes), codesUint8: await pack(new Uint8Array(roofCodes)) },
     trees: { unit: 0.1, xzhrInt16: await pack(treeInts), count: trees.length },
+    unmapped: { step: roofStep, offset: -2, cells: extraCount, runsUint32: await pack(new Uint32Array(extraRuns)),
+                codesUint8: await pack(new Uint8Array(extraCodes)) },
   };
-  if (keepGrids) result.grids = { dtm, single, first, chm, inBuilding };
+  if (keepGrids) result.grids = { dtm, single, first, chm, inBuilding, extra };
   return result;
 }

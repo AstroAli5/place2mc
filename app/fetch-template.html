@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>place2mc: get a place's data</title>
+<style>
+  :root { color-scheme: light dark; --bg: light-dark(#f4f1ea, #16130f); --ink: light-dark(#1d1a16, #efe9de);
+          --soft: light-dark(#6b6358, #a69c8e); --accent: #3c8527; --card: light-dark(#fffdf8, #211d18); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 36px 20px 60px; }
+  h1 { font-size: 34px; line-height: 1.1; margin: 0 0 8px; }
+  p { margin: 0 0 14px; }
+  .card { background: var(--card); border-radius: 14px; padding: 20px; margin: 20px 0; box-shadow: 0 1px 3px #0002; }
+  label { display: block; font-size: 14px; color: var(--soft); margin-bottom: 4px; }
+  .row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  input { width: 100%; font: inherit; padding: 10px; border-radius: 8px; border: 1px solid #8884; background: transparent; color: inherit; }
+  button, a.button { display: inline-block; font: 600 17px/1 system-ui, sans-serif; padding: 14px 22px; border-radius: 10px; border: 0;
+                     background: var(--accent); color: #fff; cursor: pointer; text-decoration: none; margin-top: 16px; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; color: var(--soft); }
+  .bar { height: 10px; border-radius: 5px; background: #8883; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .small { font-size: 13px; color: var(--soft); }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Get a place's data for place2mc</h1>
+  <p>This page downloads, in your own browser, everything place2mc needs to build the place exactly: the map from
+     OpenStreetMap, and the US government's laser scan of it (USGS 3DEP LiDAR), which measures the ground, the top of
+     every roof and every tree to a few centimetres. It boils the scan down to one small file. Then attach that file in
+     the chat.</p>
+  <div class="card">
+    <div class="row">
+      <div><label for="lat">Centre latitude</label><input id="lat" value="__LAT__"></div>
+      <div><label for="lon">Centre longitude</label><input id="lon" value="__LON__"></div>
+      <div><label for="size">Square, metres</label><input id="size" value="__SIZE__"></div>
+    </div>
+    <div style="margin-top:12px"><label for="ept">Laser scan (USGS 3DEP, Entwine Point Tiles)</label><input id="ept" value="__EPT__"></div>
+    <button id="go">Start</button> <a id="save" class="button" style="display:none">Save the file</a>
+    <div class="bar"><div id="bar"></div></div>
+    <p class="small" id="status" style="margin-top:10px">Takes a few minutes and downloads about 60 MB.</p>
+    <div id="log"></div>
+  </div>
+  <p class="small">Map data © OpenStreetMap contributors (ODbL). Laser scan: U.S. Geological Survey 3D Elevation Program
+     (public domain). LAZ decoding: laz-perf by Hobu, Inc. (Apache-2.0). Nothing is sent anywhere except the requests
+     for this data; the file is made on your computer.</p>
+</main>
+<script>
+__LAZPERF__
+</script>
+<script type="module">
+__LIDARJS__
+
+const WASM = "__WASM__";
+{ const h = location.hash.slice(1).split(',');                     // #lat,lon,size presets the boxes
+  if (h.length >= 3 && h.every((v) => v && !Number.isNaN(+v))) { document.getElementById('lat').value = h[0]; document.getElementById('lon').value = h[1]; document.getElementById('size').value = h[2]; } }
+const $ = (id) => document.getElementById(id);
+const log = (m) => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; $('status').textContent = m; };
+const bar = (f) => { $('bar').style.width = Math.round(f * 100) + '%'; };
+
+// tags place2mc never uses, so the file stays small
+const DROP = /^(tiger:|source|name:|old_name|alt_name|note|fixme|FIXME|wikidata|wikipedia|addr:|check_date|gnis:|created_by|attribution|is_in|ref:|nhd|NHD|import|lanes:|turn:|destination|mtb:|survey|description|website|phone|opening_hours|email|contact:|brand|operator:wiki|payment:|fax|url|image|wikimedia)/;
+
+async function getMap(lat0, lon0, size) {
+  const [mLat, mLon] = metresPerDegree(lat0), half = size / 2 + 20;
+  const S = lat0 - half / mLat, N = lat0 + half / mLat, W = lon0 - half / mLon, E = lon0 + half / mLon;
+  const raw = new Map(), k = 3;
+  for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) {
+    const w = W + (E - W) * j / k, s = S + (N - S) * i / k, e = W + (E - W) * (j + 1) / k, n = S + (N - S) * (i + 1) / k;
+    const url = `https://api.openstreetmap.org/api/0.6/map?bbox=${w.toFixed(6)},${s.toFixed(6)},${e.toFixed(6)},${n.toFixed(6)}`;
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(url);
+      if (r.ok) break;
+      await new Promise((ok) => setTimeout(ok, 3000));
+    }
+    if (!r.ok) throw new Error(`OpenStreetMap said ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const doc = new DOMParser().parseFromString(await r.text(), 'text/xml');
+    for (const el of doc.documentElement.children)
+      if (['node', 'way', 'relation'].includes(el.tagName)) raw.set(el.tagName[0] + el.getAttribute('id'), el);
+    log(`map: part ${i * k + j + 1} of ${k * k}`);
+    bar(0.05 + 0.1 * (i * k + j + 1) / (k * k));
+  }
+  const ll = new Map();
+  for (const [key, el] of raw) if (key[0] === 'n') ll.set(key.slice(1), [+el.getAttribute('lat'), +el.getAttribute('lon')]);
+  const wayPts = new Map();
+  for (const [key, el] of raw) if (key[0] === 'w') wayPts.set(key.slice(1), [...el.querySelectorAll('nd')].map((nd) => ll.get(nd.getAttribute('ref'))).filter(Boolean));
+  const tagsOf = (el) => { const t = {}; for (const x of el.querySelectorAll(':scope > tag')) { const key = x.getAttribute('k'); if (!DROP.test(key)) t[key] = x.getAttribute('v'); } return t; };
+  const base = [Math.round(lat0 * 1e7), Math.round(lon0 * 1e7)];
+  const enc = (pts) => { const out = []; let a = base[0], b = base[1]; for (const [la, lo] of pts) { const A = Math.round(la * 1e7), B = Math.round(lo * 1e7); out.push(A - a, B - b); a = A; b = B; } return out; };
+  const geo = (pts) => pts.map(([lat, lon]) => ({ lat, lon }));
+  const rows = [], elements = [];
+  for (const [key, el] of raw) {
+    const tags = tagsOf(el);
+    if (!Object.keys(tags).length) continue;
+    const id = +key.slice(1);
+    if (key[0] === 'n') rows.push(['n', id, tags, enc([ll.get(key.slice(1))])]);
+    else if (key[0] === 'w') {
+      const p = wayPts.get(key.slice(1));
+      if (p.length < 2) continue;
+      rows.push(['w', id, tags, enc(p)]);
+      if (tags.building) elements.push({ type: 'way', id, tags, geometry: geo(p) });
+    } else {
+      const mem = [...el.querySelectorAll('member')].filter((m) => m.getAttribute('type') === 'way' && wayPts.has(m.getAttribute('ref')))
+        .map((m) => [m.getAttribute('role'), wayPts.get(m.getAttribute('ref'))]);
+      if (!mem.length || !(tags.type === 'multipolygon' || tags.building || tags.type === 'building')) continue;
+      rows.push(['r', id, tags, mem.map(([role, p]) => [role, enc(p)])]);
+      if (tags.building) elements.push({ type: 'relation', id, tags, members: mem.map(([role, p]) => ({ type: 'way', role, geometry: geo(p) })) });
+    }
+  }
+  log(`map: ${rows.length} objects, ${elements.length} buildings`);
+  return { rows, elements };
+}
+
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  try {
+    const lat0 = +$('lat').value, lon0 = +$('lon').value, size = +$('size').value, eptBase = $('ept').value.replace(/\/?$/, '/');
+    log('starting the laser-scan decoder');
+    const wasmBinary = Uint8Array.from(atob(WASM), (c) => c.charCodeAt(0));
+    const LazPerf = await createLazPerf({ wasmBinary });
+    bar(0.03);
+    const map = await getMap(lat0, lon0, size);
+    let pieces = 0;
+    const lidar = await extractLidar({ eptBase, lat0, lon0, size, elements: map.elements, LazPerf,
+      log: (m) => { log('scan: ' + m); const k = /read (\d+) of (\d+)/.exec(m); if (k) bar(0.15 + 0.8 * k[1] / k[2]); } });
+    const out = { format: 'place2mc-browser-1', made: new Date().toISOString(), lat0, lon0, size,
+                  sources: ['OpenStreetMap contributors (ODbL)', 'USGS 3DEP LiDAR ' + eptBase],
+                  osmBase: [Math.round(lat0 * 1e7), Math.round(lon0 * 1e7)], rows: map.rows, lidar };
+    const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+    const a = $('save');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'place2mc-data.json';
+    a.style.display = 'inline-block';
+    a.click();
+    bar(1);
+    log(`done: place2mc-data.json, ${(blob.size / 1e6).toFixed(1)} MB. If it did not save by itself, press "Save the file". Then attach it in the chat.`);
+  } catch (e) {
+    log('Something went wrong: ' + (e && e.message || e) + '. Press Start to try again.');
+    $('go').disabled = false;
+  }
+};
+</script>
+</body>
+</html>
