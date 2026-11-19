@@ -108,8 +108,9 @@ Arnis's src it finds 23,104 nodes / 63,765 edges (useful to find how Arnis does 
 README redone for v1.7 ("put all of this on GitHub, make it look cool, every detail, the Spotify thing"): picture
 gallery, What's inside, Controls table, physics table, docs/creative.gif (a house going up block by block, made
 in ALA's walk-through), Sound and Spotify steps, Real details, What's new table. docs/social-preview.png
-(1280x640) is for Settings > Social preview; the About description, website and topics still cannot be set from
-the workspace (proxy: "Repository settings writes are not permitted"), and Chrome was offline, so Ali sets them.
+(1280x640) is the repo's social preview. The About description, website (ALA walk-through on raw.githack.com) and
+14 topics were set through Ali's Chrome (the workspace proxy refuses repository settings writes), and
+social-preview.png was uploaded there too; gh api repos/AstroAli5/place2mc reads them back.
 
 ## State (v1.6)
 
