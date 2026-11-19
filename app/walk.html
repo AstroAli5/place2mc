@@ -59,7 +59,7 @@
     <tr><td>F or Space Space</td><td>fly on / off (Space up, Shift down)</td></tr>
     <tr><td>[ and ]</td><td>see less / farther</td></tr>
     <tr><td>1 2 3 4</td><td>speed: normal, ×2, ×4, ×8</td></tr>
-    <tr><td>T</td><td>time of day: morning, midday, afternoon, sunset, night</td></tr>
+    <tr><td>T</td><td>time of day: morning, midday, afternoon, sunset, night, now (the real sun this minute)</td></tr>
     <tr><td>G</td><td>shaders: sun and shadows, sun only, plain Minecraft</td></tr>
     <tr><td>M</td><td>music on / off; N: play your own music file</td></tr>
     <tr><td>J</td><td>auto-jump on / off (on)</td></tr>
@@ -105,6 +105,7 @@ class World {
     this.wet = new Uint8Array(N);                // full of water: water itself, and seagrass and kelp
     B.forEach((b, i) => { this.wet[i] = b.name === "water" || b.wet ? 1 : 0; });
     this.boxes = B.map(b => b.boxes); this.collide = B.map(b => b.collide);
+    this.signRot = B.map(b => (b.sign ?? -1));   // standing signs: 0-15, turned like the game's (0 faces south)
     this.water = B.findIndex(b => b.name === "water");
     this.ground = Math.max(1, B.findIndex(b => b.name === "bedrock"));
   }
@@ -148,6 +149,9 @@ const FACES = [                                 // corners counter-clockwise see
   { n: [-1, 0, 0], c: [[0,0,0],[0,0,1],[0,1,1],[0,1,0]], shade: "x" },
   { n: [1, 0, 0],  c: [[1,0,1],[1,0,0],[1,1,0],[1,1,1]], shade: "x" },
 ];
+// a standing sign as the game draws it (2/3 of the sign model): a stick and a board 1 wide and 1/2 high
+const SIGN_BOXES = [[[7.33 / 16, 0, 7.33 / 16], [8.67 / 16, 9.33 / 16, 8.67 / 16]],
+                    [[0, 9.33 / 16, 7.33 / 16], [1, 17.33 / 16, 8.67 / 16]]];
 function faceUV(f, x, y, z) {                   // texture position of a point on face f (block units)
   switch (f) {
     case 0: return [x, z];
@@ -286,6 +290,19 @@ function buildChunk(world, cx, cz) {
           ext.push([sky / cnt / 15, bl / cnt / 15, AO[ao]]);
         }
         quad(out, pts, uvs, layer, bright, a, aos[0] + aos[2] < aos[1] + aos[3], ext, f * 8 + kindOf(b));
+      }
+    } else if (world.signRot[b] >= 0) {
+      // a standing sign at its true angle: the stick and the board, turned round the middle of the block
+      const ang = world.signRot[b] * Math.PI / 8, c = Math.cos(ang), s = Math.sin(ang);
+      const own = LM[lightAt(x, y, z)], e1 = [lightAt(x, y, z) / 15, blAt(x, y, z) / 15, 1], ext = [e1, e1, e1, e1];
+      const P = (px, py, pz) => { const dx = px - 0.5, dz = pz - 0.5; return [wx + 0.5 + dx * c - dz * s, y + py, wz + 0.5 + dx * s + dz * c]; };
+      for (const [lo, hi] of SIGN_BOXES) for (let f = 0; f < 6; f++) {
+        const pts = [], uvs = [], bright = [];
+        for (const cc of FACES[f].c) {
+          const px = cc[0] ? hi[0] : lo[0], py = cc[1] ? hi[1] : lo[1], pz = cc[2] ? hi[2] : lo[2];
+          pts.push(P(px, py, pz)); uvs.push(faceUV(f, px, py, pz)); bright.push(own * SH[FACES[f].shade]);
+        }
+        quad(out, pts, uvs, 2 * b + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8);
       }
     } else if (boxes[b].length) {
       const own = glow[b] ? 1 : LM[lightAt(x, y, z)];
@@ -567,6 +584,67 @@ async function main() {
   gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
   const shadowOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // ---------------------------------------------------------------- the street names on the signs
+  // every sign's four lines are drawn once into a picture (256 x 128 pixels each), then put on the board's front
+  const SIGN_TEXT = (info.signs || []).slice(0, 512);
+  const TEXT_VS = `#version 300 es
+  layout(location = 0) in vec3 aPos; layout(location = 1) in vec2 aUV;
+  uniform mat4 uMVP; uniform vec3 uCam; out vec2 vUV; out float vDist;
+  void main() { vUV = aUV; vDist = length(aPos - uCam); gl_Position = uMVP * vec4(aPos, 1.0); }`;
+  const TEXT_FS = `#version 300 es
+  precision mediump float;
+  in vec2 vUV; in float vDist; uniform sampler2D uText; uniform float uBright; uniform vec3 uFog; uniform vec2 uFogRange;
+  out vec4 color;
+  void main() {
+    vec4 t = texture(uText, vUV);
+    if (t.a < 0.45) discard;
+    float fog = clamp((vDist - uFogRange.x) / (uFogRange.y - uFogRange.x), 0.0, 1.0);
+    color = vec4(mix(t.rgb * uBright, uFog, fog), 1.0);
+  }`;
+  const textProg = compile(gl, TEXT_VS, TEXT_FS), tloc = n => gl.getUniformLocation(textProg, n);
+  let textVao = null, textCount = 0, textTex = null;
+  if (SIGN_TEXT.length) {
+    const big = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096;     // sharper letters where the GPU allows
+    const COLS = big ? 16 : 8, CW = big ? 256 : 128, CH = CW / 2, rows = Math.ceil(SIGN_TEXT.length / COLS);
+    const em = CW / 128;
+    const cv = document.createElement("canvas");
+    cv.width = COLS * CW; cv.height = rows * CH;
+    const g2 = cv.getContext("2d");
+    g2.fillStyle = "#fff"; g2.textAlign = "center"; g2.textBaseline = "middle";
+    const verts = [];
+    SIGN_TEXT.forEach(([x, y, z, r, lines], i) => {
+      const cx0 = (i % COLS) * CW, cy0 = Math.floor(i / COLS) * CH;
+      for (let k = 0; k < 4; k++) {
+        const t = lines[k] || "";
+        if (!t) continue;
+        let size = 15 * em;                         // the game fits about 15 letters on a line
+        g2.font = `bold ${size}px "Trebuchet MS", Arial, sans-serif`;
+        while (size > 8 * em && g2.measureText(t).width > CW - 6 * em) { size -= em; g2.font = `bold ${size}px "Trebuchet MS", Arial, sans-serif`; }
+        g2.fillText(t, cx0 + CW / 2, cy0 + (9 + k * 15) * em);
+      }
+      // the front of the board, turned like the sign (rotation 0 faces south, +z)
+      const ang = r * Math.PI / 8, c = Math.cos(ang), s = Math.sin(ang), zf = 8.67 / 16 + 0.006;
+      const P = (px, py) => { const dx = px - 0.5, dz = zf - 0.5; return [x + 0.5 + dx * c - dz * s, y + py, z + 0.5 + dx * s + dz * c]; };
+      const u0 = cx0 / cv.width, u1 = (cx0 + CW) / cv.width, v0 = cy0 / cv.height, v1 = (cy0 + CH) / cv.height;
+      const y0 = 9.33 / 16, y1 = 17.33 / 16;
+      const q = [[P(0.02, y0), [u0, v1]], [P(0.98, y0), [u1, v1]], [P(0.98, y1), [u1, v0]], [P(0.02, y1), [u0, v0]]];
+      for (const k of [0, 1, 2, 0, 2, 3]) verts.push(...q[k][0], ...q[k][1]);
+    });
+    textTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, textTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    textVao = gl.createVertexArray();
+    gl.bindVertexArray(textVao);
+    const tb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, tb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
+    gl.bindVertexArray(null);
+    textCount = verts.length / 5;
+  }
   const skyVao = gl.createVertexArray();
   gl.bindVertexArray(skyVao);
   const skyBuf = gl.createBuffer();
@@ -620,13 +698,23 @@ async function main() {
   }
   let sunsetHour = 18;                          // when the sun is 3 degrees above the horizon in the evening
   for (let hr = 12; hr < 22; hr += 0.02) if (sunAt(hr)[1] < Math.sin(3 * Math.PI / 180)) { sunsetHour = hr; break; }
-  const TIMES = [["morning", 8.5], ["midday", 12.5], ["afternoon", 15.5], ["sunset", sunsetHour], ["night", 22]];
+  function solarNow() {                         // the sun time at this place at this moment: your clock in UTC, the
+    const d = new Date(), B = 2 * Math.PI * (dayOfYear - 81) / 364;          // place's longitude, the equation of time
+    const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);   // minutes the sun runs ahead
+    const utc = d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
+    return ((utc + (info.lon ?? 0) / 15 + eot / 60) % 24 + 24) % 24;
+  }
+  const TIMES = [["morning", 8.5], ["midday", 12.5], ["afternoon", 15.5], ["sunset", sunsetHour], ["night", 22],
+                 ["now", null]];               // "now": the real sun over the place right now, moving as you watch
+  let lastNowShadow = 0;
   let timeIndex = 2, shaderLevel = TOUCH ? 1 : 2;  // 2: sun and shadows, 1: sun without shadows, 0: plain Minecraft
   let shadowDirty = true;
   const mix3 = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
   function lighting() {
-    const hour = TIMES[timeIndex][1], sun = sunAt(hour), e = sun[1];
+    const hour = TIMES[timeIndex][1] ?? solarNow(), sun = sunAt(hour), e = sun[1];
+    if (TIMES[timeIndex][1] === null && performance.now() - lastNowShadow > 20000) {   // the sun moves: new shadows
+      lastNowShadow = performance.now(); shadowDirty = true; }
     const day = smooth(-0.1, 0.22, e), low = 1 - smooth(0.04, 0.5, e), night = 1 - smooth(-0.12, 0.02, e);
     const zenith = mix3(mix3(info.zenith, [0.28, 0.4, 0.72], low * 0.8), [0.006, 0.01, 0.03], night);
     const horizon = mix3(mix3(info.horizon, [1.0, 0.62, 0.36], low * 0.85), [0.03, 0.04, 0.08], night);
@@ -1210,6 +1298,19 @@ async function main() {
     gl.activeTexture(gl.TEXTURE0);
     gl.disable(gl.BLEND);
     for (const m of meshes.values()) if (m.opaque) { gl.bindVertexArray(m.opaque.vao); gl.drawElements(gl.TRIANGLES, m.opaque.count, gl.UNSIGNED_INT, 0); }
+    if (textCount) {                            // the names on the signs (only on boards already built)
+      gl.useProgram(textProg);
+      gl.uniformMatrix4fv(tloc("uMVP"), false, new Float32Array(mvp));
+      gl.uniform3fv(tloc("uCam"), eye);
+      gl.uniform1f(tloc("uBright"), shade ? 0.25 + 0.75 * L.day : 1);
+      gl.uniform3fv(tloc("uFog"), skyLow);
+      if (under) gl.uniform2f(tloc("uFogRange"), 2, 26); else gl.uniform2f(tloc("uFogRange"), 24, 48);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, textTex); gl.uniform1i(tloc("uText"), 2);
+      gl.bindVertexArray(textVao);
+      gl.drawArrays(gl.TRIANGLES, 0, textCount);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.useProgram(prog);
+    }
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
@@ -1234,7 +1335,7 @@ async function main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt, sound,      // for tests
+  window.__walk = { player, world, meshes, keys, play, update, collides, respawn, sunAt, sound, signs: SIGN_TEXT,      // for tests
                     buildAll: () => { let n = 0; while (buildSome(2000)) n++; return n; },
                     setTime: i => { timeIndex = i; shadowDirty = true; }, setShaders: i => { shaderLevel = i; shadowDirty = true; } };
 }

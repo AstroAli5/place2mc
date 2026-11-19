@@ -124,6 +124,24 @@ assert wrong == 0 and subchunks == nonempty
 # 3. the other chunk records, and the heights and biomes
 tags = Counter(k[8] for k in db if len(k) == 9)
 print("per-chunk records:", dict(tags), "for", expected_chunks, "chunks")
+# the signs' text: block-entity records (49), one little-endian NBT compound after another
+sign_text = {}
+for k, v in db.items():
+    if len(k) == 9 and k[8] == 49:
+        cx, cz = struct.unpack("<ii", k[:8])
+        buf = io.BytesIO(v)
+        while buf.tell() < len(v):
+            e = nbtlib.File.parse(buf, byteorder="little")
+            assert str(e["id"]) == "Sign" and int(e["isMovable"]) == 1, e
+            x, y, z = int(e["x"]), int(e["y"]), int(e["z"])
+            assert x >> 4 == cx and z >> 4 == cz, "sign in the wrong chunk's record"
+            assert str(e["FrontText"]["Text"]) == str(e["BackText"]["Text"])
+            assert int(e["FrontText"]["SignTextColor"]) == -1
+            sign_text[(x, y, z)] = str(e["FrontText"]["Text"])
+want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): "\n".join(lines).rstrip("\n")
+             for y, z, x, r, lines in p.build_volume.signs}
+assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_text))
+print(f"signs: {len(sign_text)} with their text in block-entity records, e.g. {next(iter(sign_text.values()), '')!r}")
 assert tags[44] == tags[54] == tags[43] == expected_chunks
 assert all(v == bytes([bedrock.CHUNK_VERSION]) for k, v in db.items() if len(k) == 9 and k[8] == 44)
 assert all(v == struct.pack("<i", 2) for k, v in db.items() if len(k) == 9 and k[8] == 54)

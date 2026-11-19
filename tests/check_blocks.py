@@ -91,7 +91,11 @@ for version in sys.argv[2:]:
                 # the game makes these 1.5 blocks tall so players cannot jump over, and wider than drawn:
                 # compare which sides of the block they reach and whether they stand in the middle
                 game, ours = sides_reached(game), sides_reached(ours)
-            if mcrender.CROSS[i] or name == "rail":
+            if name.endswith("_sign"):
+                # drawn by the game's sign renderer, not a block model, and walked through: no collision box
+                if game:
+                    bad.append(f"{name}: the game gives this sign a collision box {game}")
+            elif mcrender.CROSS[i] or name == "rail":
                 # drawn as two crossed pictures; in the game these plants have no collision box at all
                 if game:
                     bad.append(f"{name}: drawn as a walk-through plant but the game gives it a collision box {game}")

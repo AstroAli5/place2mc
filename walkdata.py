@@ -59,7 +59,7 @@ def block_table():
             collide = []
         elif name == "barrier":
             collide = [[0, 0, 0, 1, 1, 1]]
-        elif cross or name in ("rail", "water", "lantern") or name.endswith("_door"):
+        elif cross or name in ("rail", "water", "lantern") or name.endswith(("_door", "_sign")):
             collide = [] if not name.endswith("_door") else boxes
         elif name.endswith(("_fence", "_wall")):
             collide = [[min(b[0] for b in boxes), 0, min(b[2] for b in boxes), max(b[3] for b in boxes), 1.5,
@@ -81,6 +81,7 @@ def block_table():
             "skyStop": bool(mcrender._BLOCKS_SKY_BELOW[i]) and not invisible,
             "glow": bool(mcrender.GLOWING[i]),
             "wet": bool(mcrender.UNDERWATER[i]),                          # seagrass, kelp: water in the same cell
+            "sign": int(props["rotation"]) if name.endswith("_sign") else -1,     # drawn at its true angle
             "collide": collide,
         })
     return table
@@ -89,7 +90,8 @@ def block_table():
 VIEWER = Path(__file__).resolve().parent / "app" / "walk.html"
 
 
-def export(vol, out_path, spawn, name, textures="auto", credit="Map data © OpenStreetMap contributors", latlon=None):
+def export(vol, out_path, spawn, name, textures="auto", credit="Map data © OpenStreetMap contributors", latlon=None,
+           signs=()):
     """Write the walk-through HTML file. spawn: where the feet are, in Minecraft coordinates (x, y, z), as
     choose_spawn gives it; the centre of the built square is x=0, z=0."""
     out_path = Path(out_path)
@@ -120,6 +122,7 @@ def export(vol, out_path, spawn, name, textures="auto", credit="Map data © Open
                      else "your Minecraft" if source is not None else "built-in"),
         "blocks": block_table(),
     }
+    info["signs"] = [[int(x), int(y), int(z), int(r), list(lines)] for y, z, x, r, lines in signs]   # their text
     if latlon:                                  # for the sun: where it stands over this place on the day you walk
         info["lat"], info["lon"] = round(float(latlon[0]), 5), round(float(latlon[1]), 5)
     data = {"info": info, "bin": base64.b64encode(packed).decode("ascii"),

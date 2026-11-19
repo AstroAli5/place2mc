@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.4"
+VERSION = "1.5"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -141,6 +141,9 @@ TALL_SEAGRASS = (block("tall_seagrass", half="lower"), block("tall_seagrass", ha
 KELP = block("kelp", age="25")                    # the top of a kelp stalk, fully grown so it stays as built
 KELP_PLANT = block("kelp_plant")
 UNDERWATER_PLANTS = (SEAGRASS, *TALL_SEAGRASS, KELP, KELP_PLANT)
+# street-name signs: a dark board with white letters on a post, turned in 16 steps like the game's standing signs
+# (rotation 0 faces south, 4 west, 8 north, 12 east)
+SIGNS = [block("dark_oak_sign", rotation=str(r)) for r in range(16)]
 
 # ---------------------------------------------------------------------------------------------- climate
 # Every place gets the biome, grass colour, bare ground and trees of its climate, from the Köppen-Geiger map of
@@ -298,6 +301,7 @@ BLOCK_RGB = {
     "dirt": (134, 96, 67), "polished_blackstone_bricks": (48, 42, 50), "stone": (125, 125, 125),
     "dark_prismarine": (52, 92, 76), "red_nether_bricks": (69, 7, 9), "yellow_terracotta": (186, 133, 35),
     "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "bookshelf": (117, 94, 59),
+    "dark_oak_sign": (68, 44, 22),
     "spruce_slab": (114, 84, 48), "black_concrete": (8, 10, 15), "red_concrete": (142, 33, 33),
     "lime_concrete": (94, 169, 24), "yellow_concrete": (241, 175, 21), "blue_concrete": (45, 47, 143), "dark_prismarine_stairs": (52, 92, 76),
     "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "brick_wall": (150, 97, 83), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
@@ -792,6 +796,7 @@ def build_map(elements, lat0, lon0, size, climate=None):
     areas, roads, waterways, rails, buildings, trees, coast, piers, marked = [], [], [], [], [], [], [], [], []
     crossing_ways, crossing_nodes, barriers, benches, campuses, industrial, signals = [], [], [], [], [], [], []
     bridges = []          # (width, surface class, line, layer, is a railway)
+    streets = []          # (name or "", width, line) of every road cars drive on
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -877,6 +882,8 @@ def build_map(elements, lat0, lon0, size, climate=None):
                 if highway.endswith("_link"):
                     width = max(4, width - 3)
                 roads.append((width, surface, sidewalk, line))
+                if surface == S_ROAD:                  # for the street-name signs at the crossings
+                    streets.append(((tags.get("name") or "").strip(), width, line))
                 if surface == S_ROAD and width >= 8 and tags.get("oneway") != "yes":
                     marked.append(line)
                 if any(tags.get(k) == "crossing" for k in ("footway", "cycleway", "path")) and marked_crossing(tags):
@@ -1101,6 +1108,7 @@ def build_map(elements, lat0, lon0, size, climate=None):
         for x, y in line_cells(line, size):
             track[y, x] = True
     build_map.details = {"barriers": (barrier_kind, barrier_tall), "rails": track, "bridges": bridges,
+                         "streets": streets,
                          "signals": [(int(x), int(y)) for x, y in signals if 0 <= x < size and 0 <= y < size],
                          "benches": [(int(x), int(y)) for x, y in benches if 0 <= x < size and 0 <= y < size]}
     sea_arr = np.array(sea) > 0 if sea is not None else np.zeros((size, size), dtype=bool)
@@ -1406,6 +1414,67 @@ def lay_rails(vol, track, base):
     free = vol[y, z_i, x_i] == AIR
     vol[y[free], z_i[free], x_i[free]] = shape[z_i[free], x_i[free]]
     return int(free.sum())
+
+
+def sign_lines(name, width=15):
+    """A street name on the four lines of a sign: whole words, at most `width` letters a line, in the middle."""
+    lines, line = [], ""
+    for word in name.split():
+        while len(word) > width:                       # a very long word: cut it
+            lines.append(word[:width])
+            word = word[width:]
+        if line and len(line) + 1 + len(word) > width:
+            lines.append(line)
+            line = word
+        else:
+            line = (line + " " + word).strip()
+    if line:
+        lines.append(line)
+    lines = lines[:4]
+    top = (4 - len(lines)) // 2
+    return [""] * top + lines + [""] * (4 - top - len(lines))
+
+
+def plan_street_signs(streets, size):
+    """Where the street-name signs go. At every crossing (a point where three or more road ends meet), each named
+    road there gets a sign: beside that road, just past the crossing, turned to face the crossing so you read it
+    when you look down the street. The same name is not repeated within 24 blocks. Returns
+    [(x, z, rotation 0-15, name)] in block coordinates."""
+    at = {}
+    for i, (name, width, line) in enumerate(streets):
+        for k, (x, z) in enumerate(line):
+            at.setdefault((round(x, 1), round(z, 1)), []).append((i, k))
+    plans, used = [], []
+    for (jx, jz), members in sorted(at.items()):
+        if not (8 <= jx < size - 8 and 8 <= jz < size - 8):
+            continue
+        degree = sum((k > 0) + (k < len(streets[i][2]) - 1) for i, k in members)
+        if degree < 3:
+            continue
+        widest = max(streets[i][1] for i, _ in members)
+        done = set()
+        for i, k in members:
+            name, width, line = streets[i]
+            if not name or name in done:
+                continue
+            nxt = line[k + 1] if k + 1 < len(line) else line[k - 1]
+            ax, az = nxt[0] - jx, nxt[1] - jz
+            length = math.hypot(ax, az)
+            if length < 1:
+                continue
+            ax, az = ax / length, az / length
+            along = min(widest / 2 + 2.5, length * 0.8)            # just past the crossing, on this road
+            side = width / 2 + 1.5                                   # on its verge or pavement
+            x, z = jx + ax * along - az * side, jz + az * along + ax * side
+            if any(n == name and math.hypot(x - ux, z - uz) < 24 or math.hypot(x - ux, z - uz) < 3
+                   for ux, uz, n in used):
+                continue
+            # facing the crossing: rotation r faces (-sin, cos) of r * 22.5 degrees
+            rotation = int(round(math.degrees(math.atan2(ax, -az)) / 22.5)) % 16
+            plans.append((x, z, rotation, name))
+            used.append((x, z, name))
+            done.add(name)
+    return plans
 
 
 def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_track=None, bed=None):
@@ -2084,6 +2153,30 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         plants += len(z_i)
     bridge_blocks, bridge_rails = build_bridges(vol, details.get("bridges", []), g, level, water, ground,
                                                 has_building, details.get("rails"), bed)
+    # street-name signs: a fence post with the sign on top, on the verge beside the road, never on the road itself
+    signs = []
+    low = {AIR, SHORT_GRASS, FERN, DEAD_BUSH, *FLOWERS, *TALL_GRASS}
+    track_here = details.get("rails") if details.get("rails") is not None else np.zeros((size, size), dtype=bool)
+    keep_off = np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) | has_building | water | track_here
+    for y, oz, ox in doorways:                         # and out of the way of every door
+        keep_off[max(0, oz - 1):oz + 2, max(0, ox - 1):ox + 2] = True
+    for sx, sz, rotation, name in plan_street_signs(details.get("streets", []), size):
+        fx, fz = -math.sin(math.radians(rotation * 22.5)), math.cos(math.radians(rotation * 22.5))   # it faces
+        for step in (0, 1, 2, 3):                        # further from the road if it landed on it
+            x, z = int(sx + fz * step), int(sz - fx * step)
+            if 2 <= x < size - 2 and 2 <= z < size - 2 and not keep_off[z, x]:
+                break
+        else:
+            continue
+        y = int(g[z, x]) + 1
+        if y + 2 >= vol.shape[0] or vol[y, z, x] not in low or vol[y + 1, z, x] not in low:
+            continue
+        vol[y, z, x] = FENCES[0]
+        vol[y + 1, z, x] = SIGNS[rotation]
+        if vol[y + 2, z, x] in low:
+            vol[y + 2, z, x] = AIR
+        signs.append((y + 1, z, x, rotation, sign_lines(name)))
+    build_volume.signs = signs
     for y, oz, ox in doorways:                         # keep the way out of every door clear (on a slope this
         vol[y:y + 2, oz, ox] = AIR                     # digs a doorway into the hillside), done last so nothing
                                                        # placed later can fill it
@@ -2092,7 +2185,8 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
                           "benches": benches, "bushes and flowers by buildings": landscaping,
                           "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals,
                           "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails,
-                          "seagrass": water_life["seagrass"], "kelp stalks": water_life["kelp"]}
+                          "seagrass": water_life["seagrass"], "kelp stalks": water_life["kelp"],
+                          "street-name signs": len(signs)}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -2220,8 +2314,19 @@ def encode_section(blocks, section_y, biomes=None):
             + nbt_compound("biomes", biome_tag) + b"\x00")
 
 
-def encode_chunk(column, cx, cz, biomes=None):
-    """column: array [layer, 16, 16] for one chunk. biomes: 4x4 biome numbers or None."""
+def sign_entity(x, y, z, lines):
+    """A sign's text, as Minecraft 1.18 stores it (four JSON lines; the game moves them to the front of the sign when
+    it upgrades the chunk). x, y, z: world coordinates."""
+    payload = nbt_string("id", "minecraft:sign") + nbt_int("x", x) + nbt_int("y", y) + nbt_int("z", z)
+    payload += nbt_byte("keepPacked", 0)
+    for i, line in enumerate(lines[:4]):
+        payload += nbt_string(f"Text{i + 1}", json.dumps({"text": line}, ensure_ascii=False))
+    return payload + nbt_string("Color", "white") + nbt_byte("GlowingText", 0) + b"\x00"
+
+
+def encode_chunk(column, cx, cz, biomes=None, entities=()):
+    """column: array [layer, 16, 16] for one chunk. biomes: 4x4 biome numbers or None. entities: the payloads of
+    its block entities (sign_entity)."""
     nonair = np.flatnonzero(column.reshape(column.shape[0], -1).any(axis=1))
     n_sections = (int(nonair[-1]) // 16 + 1) if len(nonair) else 1
     sections = [encode_section(column[s * 16:(s + 1) * 16].ravel(), Y_MIN // 16 + s, biomes)
@@ -2230,7 +2335,8 @@ def encode_chunk(column, cx, cz, biomes=None):
         nbt_int("DataVersion", DATA_VERSION) + nbt_int("xPos", cx) + nbt_int("yPos", Y_MIN // 16) + nbt_int("zPos", cz)
         + nbt_string("Status", "minecraft:full") + nbt_long("LastUpdate", 0) + nbt_long("InhabitedTime", 0)
         + nbt_byte("isLightOn", 0)                     # 0 = the game works out the lighting when it loads the chunk
-        + nbt_list("sections", 10, sections) + nbt_list("block_entities", 0, [])
+        + nbt_list("sections", 10, sections)
+        + (nbt_list("block_entities", 10, list(entities)) if entities else nbt_list("block_entities", 0, []))
         + nbt_list("block_ticks", 0, []) + nbt_list("fluid_ticks", 0, [])
         + nbt_compound("Heightmaps", b"")
         + nbt_compound("structures", nbt_compound("References", b"") + nbt_compound("starts", b""))
@@ -2255,15 +2361,20 @@ def write_region(path, chunks):
     path.write_bytes(bytes(locations) + bytes(timestamps) + bytes(body))
 
 
-def write_world(vol, world_dir, biomes=None):
+def write_world(vol, world_dir, biomes=None, signs=()):
+    """signs: (layer, z, x, rotation, lines) for the text of every sign block (build_volume.signs)."""
     size = vol.shape[1]
     offset = size // 32            # chunk number of the west/north edge is -offset
+    by_chunk = {}
+    for y, z, x, _, lines in signs:
+        by_chunk.setdefault((x // 16, z // 16), []).append(sign_entity(x - size // 2, y + Y_MIN, z - size // 2, lines))
     regions = {}
     for cz_i in range(size // 16):
         for cx_i in range(size // 16):
             cx, cz = cx_i - offset, cz_i - offset
             chunk_biomes = biomes[cz_i * 4:(cz_i + 1) * 4, cx_i * 4:(cx_i + 1) * 4] if biomes is not None else None
-            raw = encode_chunk(vol[:, cz_i * 16:(cz_i + 1) * 16, cx_i * 16:(cx_i + 1) * 16], cx, cz, chunk_biomes)
+            raw = encode_chunk(vol[:, cz_i * 16:(cz_i + 1) * 16, cx_i * 16:(cx_i + 1) * 16], cx, cz, chunk_biomes,
+                               by_chunk.get((cx_i, cz_i), ()))
             regions.setdefault((cx >> 5, cz >> 5), {})[(cx & 31, cz & 31)] = raw
     region_dir = Path(world_dir) / "region"
     region_dir.mkdir(parents=True, exist_ok=True)
@@ -2558,20 +2669,20 @@ def main():
         credit = "Map data © OpenStreetMap contributors" + (
             ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "")
         walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures,
-                               credit=credit, latlon=(lat, lon))
+                               credit=credit, latlon=(lat, lon), signs=getattr(build_volume, "signs", ()))
         print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
         print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):
         sys.path.insert(0, str(Path(__file__).resolve().parent))      # bedrock.py sits next to this file
         import bedrock
         mcworld = bedrock.export_mcworld(vol, biomes, out_dir / f"{world_name}.mcworld", world_name, spawn,
-                                         Image.open(preview))
+                                         Image.open(preview), signs=getattr(build_volume, "signs", ()))
         print(f"Bedrock world: {mcworld} (double-click it to add it to Minecraft Bedrock 1.21.120 or newer)")
         print(f"MCWORLD: {mcworld.resolve()}")
         if args.edition == "bedrock":
             print(f"WORLD: {out_dir.resolve()}")
             return
-    n_regions, n_chunks = write_world(vol, out_dir, biomes)
+    n_regions, n_chunks = write_world(vol, out_dir, biomes, getattr(build_volume, "signs", ()))
     print(f"Wrote {n_chunks} chunks in {n_regions} region files to {out_dir / 'region'}")
     if args.creating:
         write_level_dat(out_dir, world_name, spawn)

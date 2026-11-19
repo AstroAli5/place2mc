@@ -302,6 +302,8 @@ class TextureSource:
             base = name[:-len("_slab")]
             if base in ("oak", "spruce", "birch", "dark_oak", "jungle", "acacia"):
                 base += "_planks"
+        elif name.endswith("_sign"):                     # drawn with the planks it is made of
+            base = name[:-len("_sign")] + "_planks"
         if self.path == BUNDLED_TEXTURES:
             base = BUNDLED_STANDINS.get(base, base)
         backdrop = BACKDROP["leaves"] if "leaves" in name else BACKDROP["glass"] if name == "glass" else \
@@ -438,6 +440,7 @@ def _make_textures(source=None):
     for base in list(wood) + list(stairs):
         by_name[base + "_stairs"] = by_name[stairs.get(base, base + "_planks")]
     by_name["stone_brick_wall"] = by_name["stone_bricks"]
+    by_name["dark_oak_sign"] = by_name["dark_oak_planks"]
     rail = np.array(by_name["gravel"], dtype=float)          # the built-in rail: wooden sleepers and two iron rails
     rail[1::4] = (rail[1::4] * 0.3 + np.array((112, 84, 52)) * 0.7)
     rail[2::4] = (rail[2::4] * 0.3 + np.array((100, 76, 46)) * 0.7)
@@ -522,6 +525,12 @@ def _shapes():
             boxes = [((0, 0, 0), (1, .5, 1))]
         elif name.endswith("_slab") and props.get("type") == "top":
             boxes = [((0, .5, 0), (1, 1, 1))]
+        elif name.endswith("_sign"):                # a standing sign: the stick and the board, turned to the
+            # nearest quarter here (the game turns it in 16 steps; the walk-through draws the true angle)
+            quarter = int(round(int(props["rotation"]) / 4)) % 2
+            stick = ((7 / 16, 0, 7 / 16), (9 / 16, 9 / 16, 9 / 16))
+            board = ((0, 9 / 16, 7 / 16), (1, 1, 9 / 16)) if quarter == 0 else ((7 / 16, 9 / 16, 0), (9 / 16, 1, 1))
+            boxes = [stick, board]
         elif name == "lantern":                     # same two boxes as the game: the body and the small cap
             y = 1 / 16 if (props or {}).get("hanging") == "true" else 0      # a hanging lantern sits a pixel higher
             boxes = [((5 / 16, y, 5 / 16), (11 / 16, y + 7 / 16, 11 / 16)),
@@ -714,7 +723,7 @@ AO_LEVELS = np.array([0.50, 0.68, 0.84, 1.0], dtype=np.float32)
 # Slabs and stairs are lit in their own cell (light comes in from above and the sides) but, like the game,
 # their full bottom stops sky light going straight down.
 _LIGHT_PASSES = np.array([n in ("air", "glass", "light_blue_stained_glass", "gray_stained_glass", "lantern", "barrier")
-                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall")) or n == "rail"
+                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall", "_sign")) or n == "rail"
                           for n in _names]) | CROSS
 UNDERWATER = np.array([n in ("seagrass", "tall_seagrass", "kelp", "kelp_plant") for n in _names])   # full of water
 _DIMS_LIGHT = np.array([n.endswith("_leaves") or n == "water" for n in _names]) | UNDERWATER

@@ -5,6 +5,7 @@ stripes, the benches are there. Saves a picture of it.
 
 usage: python -I tests/check_details.py [OUT.png]
 """
+import math
 import sys
 from pathlib import Path
 
@@ -30,7 +31,8 @@ def node(x, z, **tags):
 
 ELEMENTS = []
 for el in [
-    way([(-100, 0), (100, 0)], highway="residential"),
+    way([(-100, 0), (-75, 0), (100, 0)], highway="residential", name="Long Street"),
+    way([(-75, 0), (-75, 22)], highway="residential", name="Beyers Naudé Drive"),       # a T-junction
     node(25, 0, highway="crossing", crossing="uncontrolled", crossing_ref="zebra"),
     way([(-20, -7), (-20, 7)], highway="footway", footway="crossing", crossing="marked"),
     way([(12, 16), (22, 16), (22, 26), (12, 26), (12, 16)], building="house"),
@@ -221,5 +223,26 @@ depth = int(np.isin(col, (p.WATER, *p.UNDERWATER_PLANTS)).sum())
 print(f"lake: {depth} blocks deep in the middle")
 if depth < 4:
     problems.append(f"lake only {depth} blocks deep in the middle")
+# street-name signs at the T-junction (-75, 0): one for each street, on a post beside it, facing the crossing
+signs = p.build_volume.signs
+names = {" ".join(l for l in lines if l): (y, z, x, r, lines) for y, z, x, r, lines in signs}
+print("street-name signs:", {n: (v[1], v[2], v[3], v[4]) for n, v in names.items()})
+jz, jx = cell(-75, 0)
+for want in ("Long Street", "Beyers Naudé Drive"):
+    if want not in names:
+        problems.append(f"no street-name sign for {want}")
+        continue
+    y, z, x, r, lines = names[want]
+    if vol[y, z, x] != p.SIGNS[r] or vol[y - 1, z, x] != p.FENCES[0]:
+        problems.append(f"the {want} sign is not a sign on a post: {p.BLOCKS[vol[y, z, x]][0]} on {p.BLOCKS[vol[y - 1, z, x]][0]}")
+    if ground[z, x] in (p.S_ROAD, p.S_LINE):
+        problems.append(f"the {want} sign stands on the road")
+    if math.hypot(z - jz, x - jx) > 12:
+        problems.append(f"the {want} sign is {math.hypot(z - jz, x - jx):.0f} blocks from the crossing")
+    fx, fz = -math.sin(math.radians(r * 22.5)), math.cos(math.radians(r * 22.5))
+    if fx * (jx - x) + fz * (jz - z) <= 0:
+        problems.append(f"the {want} sign turns its back on the crossing (rotation {r})")
+if names.get("Beyers Naudé Drive", (0, 0, 0, 0, []))[4] != ["", "Beyers Naudé", "Drive", ""]:
+    problems.append(f"sign lines: {names.get('Beyers Naudé Drive')}")
 print("\n".join(problems[:20]) if problems else "details OK")
 sys.exit(1 if problems else 0)

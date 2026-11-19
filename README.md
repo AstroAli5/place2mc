@@ -28,9 +28,20 @@
 ## Walk around it
 
 Every conversion also makes a page you open in any browser, on a computer or a phone. Walk with W A S D and the
-mouse, jump, sprint, fly (F), go 2, 4 or 8 times faster (1-4), change the time of day (T) and switch the shaders (G).
+mouse, jump, sprint, fly (F), go 2, 4 or 8 times faster (1-4), change the time of day (T, including "now": the
+real sun over the place this minute) and switch the shaders (G).
 
 <p align="center"><img src="docs/flyover.gif" width="640" alt="Flying round the ALA campus in the browser walk-through"></p>
+
+### Street names
+
+Every crossing gets a sign for each named street there, with the real name from the map, on a post beside the
+street and turned to face the crossing, so you can find your way around like in the real place. The names are
+saved in the Java and the Bedrock world (Bedrock shows them on both sides of the sign) and drawn in the walk-through.
+
+| | |
+|---|---|
+| ![A street sign at ALA: Printech Avenue](docs/street-sign-ala.jpg) | ![A street sign in Monaco: Avenue de Roqueville](docs/street-sign-monaco.jpg) |
 
 ### With sound
 

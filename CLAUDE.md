@@ -88,6 +88,21 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.5)
+
+v1.5: Ali: "continue making it more realistic, search how, edit without asking, update GitHub". Street-name
+signs: build_map keeps every car road as details["streets"] (name, width, line); plan_street_signs finds crossings
+(rounded shared vertices with 3+ road ends) and puts one sign per named road there, beside it, facing the
+crossing, the same name not within 24 blocks; build_volume places FENCES[0] + SIGNS[rotation] (dark_oak_sign,
+16 rotations) off roads, buildings, water, rails and doorways, and records build_volume.signs (layer, z, x,
+rotation, 4 lines). Java: chunk block_entities in the 1.18 format (Text1-4 JSON, Color white; the game moves them
+to front_text). Bedrock: key type 49 records, PocketMine-MP's field set (id Sign, FrontText/BackText with Text,
+SignTextColor -1, IgnoreLighting, PersistFormatting; IsWaxed). verify_world / verify_bedrock compare every sign
+text; check_blocks expects no collision box for signs; check_details has a named T-junction. walk.html draws
+signs at their true angle (SIGN_BOXES) and their text from a canvas atlas (256x128 a sign when the GPU allows
+4096 textures, else 128x64) with its own small shader; mcrender draws the shape turned to the nearest quarter,
+without text. Walk-through time "now": solarNow() = UTC + longitude/15 + equation of time.
+
 ## State (v1.4)
 
 v1.4: Ali: same as v1.3 + "put the sound of walking and put Warmth by C418 in the background". Warmth is Mojang's
@@ -198,7 +213,8 @@ a gravel desert; campus outlines (amenity=college/school) were not downloaded; c
 5-7 storeys. Overpass was over capacity that day, so downloads now fall back to api.openstreetmap.org.
 
 Known limits: a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
-memory; fences are flat-ground objects; bridges are worked out from the map alone (no real deck heights); no signs.
+memory; fences are flat-ground objects; bridges are worked out from the map alone (no real deck heights); no traffic
+signs or house numbers yet; the pictures draw signs without their text.
 
 ## Similar tools (for ideas)
 

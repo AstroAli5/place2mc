@@ -76,6 +76,16 @@ on any map; this would give them one.
   it now scrolls, and short screens hide the key list.
 - The walk-through was silent, and swimming showed the sky instead of water.
 
+## Researched for v1.5
+
+The map data already holds a name for most streets (18 at ALA, 137 in Monaco) but place2mc showed none of them,
+and "no signs" was on the known-limits list. Arnis's release notes list what it added for realism: real signs,
+traffic signs and house numbers (3.1), trees from a canopy height map (3.1), roof overhangs, chimneys,
+balconies and window shutters (2.5-2.6), street furniture such as hydrants and drinking water (2.7), snow
+above the snow line (2.9). Street names were picked first because they make a place recognisable from the
+ground. Traffic signs, house numbers and street furniture need map points that place2mc does not download
+yet (stop signs, hydrants, addresses), so they come next.
+
 ## What comes next
 
 - [ ] Real tree heights and positions from Meta/WRI's canopy height maps
@@ -90,3 +100,8 @@ on any map; this would give them one.
 - [x] Bridges at the right height, tunnels left out
 - [x] Seagrass and kelp under water, by climate (v1.4); Bedrock gets the water layer the game needs for them
 - [x] Sounds in the walk-through: footsteps by surface, birds, crickets, waves, wind, original piano music (v1.4)
+- [x] Street-name signs at every crossing, with the real names, in Java, Bedrock and the walk-through (v1.5).
+  Arnis 3.1 added signs too; it writes Bedrock signs without text, place2mc writes the text in both editions
+  (the Bedrock fields follow PocketMine-MP's sign code)
+- [x] "Now" in the walk-through: the sun where it really is over the place this minute (longitude and the
+  equation of time) (v1.5)

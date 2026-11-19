@@ -272,10 +272,24 @@ def data3d(column, biomes):
     return out
 
 
-def chunk_records(vol, biomes, palette_bytes):
+def sign_entity(x, y, z, lines):
+    """A sign's text as Bedrock saves it (the field set PocketMine-MP writes): the same name on both sides, white."""
+    side = [("Text", "string", "\n".join(lines).rstrip("\n")), ("SignTextColor", "int", -1),     # 0xFFFFFFFF, white
+            ("IgnoreLighting", "byte", 0), ("PersistFormatting", "byte", 1)]
+    return le_compound([("id", "string", "Sign"), ("x", "int", x), ("y", "int", y), ("z", "int", z),
+                        ("isMovable", "byte", 1), ("FrontText", "compound", side), ("BackText", "compound", side),
+                        ("IsWaxed", "byte", 1)])
+
+
+def chunk_records(vol, biomes, palette_bytes, signs=()):
+    """signs: (layer, z, x, rotation, lines) of every sign block; their text goes in each chunk's block-entity
+    record (key type 49), one little-endian NBT compound after another."""
     size = vol.shape[1]
     offset = size // 32
     records = {}
+    by_chunk = {}
+    for y, z, x, _, lines in signs:
+        by_chunk.setdefault((x // 16, z // 16), []).append(sign_entity(x - size // 2, y + p.Y_MIN, z - size // 2, lines))
     for cz_i in range(size // 16):
         for cx_i in range(size // 16):
             cx, cz = cx_i - offset, cz_i - offset
@@ -285,6 +299,8 @@ def chunk_records(vol, biomes, palette_bytes):
             records[prefix + bytes([54])] = struct.pack("<i", 2)              # finished generating
             chunk_biomes = biomes[cz_i * 4:(cz_i + 1) * 4, cx_i * 4:(cx_i + 1) * 4]
             records[prefix + bytes([43])] = data3d(column, chunk_biomes)
+            if (cx_i, cz_i) in by_chunk:
+                records[prefix + bytes([49])] = b"".join(by_chunk[(cx_i, cz_i)])
             for s in range(column.shape[0] // 16):
                 section = column[s * 16:(s + 1) * 16]
                 if not section.any():
@@ -343,7 +359,7 @@ def level_dat(name, spawn):
     return struct.pack("<ii", 10, len(body)) + body
 
 
-def export_mcworld(vol, biomes, out_path, name, spawn, icon=None):
+def export_mcworld(vol, biomes, out_path, name, spawn, icon=None, signs=()):
     """Write a .mcworld file (a zip of the world folder) for Minecraft Bedrock 1.21.120 and newer."""
     out_path = Path(out_path)
     entries = load_table()
@@ -352,7 +368,7 @@ def export_mcworld(vol, biomes, out_path, name, spawn, icon=None):
     if stage.exists():
         import shutil
         shutil.rmtree(stage)
-    write_leveldb(stage / "db", chunk_records(vol, biomes, palette_bytes))
+    write_leveldb(stage / "db", chunk_records(vol, biomes, palette_bytes, signs))
     (stage / "level.dat").write_bytes(level_dat(name, spawn))
     (stage / "levelname.txt").write_text(name, encoding="utf-8")
     if icon is not None:

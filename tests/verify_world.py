@@ -8,6 +8,7 @@ import io, random, struct, sys, zlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
+import json
 import anvil, nbtlib
 import place2mc as p
 
@@ -39,6 +40,7 @@ print("expected volume", vol.shape, "non-air blocks", int((vol != p.AIR).sum()))
 # 1. every chunk parses with nbtlib and has the expected structure
 n_chunks = 0
 single = {}     # (cx, cz, section y) -> the one block that fills a section stored without a data array
+sign_text = {}  # (x, y, z) world -> the four lines, from the block entities
 for path in sorted((world / "region").glob("r.*.mca")):
     raw = path.read_bytes()
     assert len(raw) % 4096 == 0, "region file is not a whole number of sectors"
@@ -55,6 +57,11 @@ for path in sorted((world / "region").glob("r.*.mca")):
         assert int(root["DataVersion"]) == p.DATA_VERSION and str(root["Status"]) == "minecraft:full"
         assert int(root["xPos"]) == rx * 32 + i % 32 and int(root["zPos"]) == rz * 32 + i // 32, "chunk in wrong slot"
         cx, cz = int(root["xPos"]), int(root["zPos"])
+        for be in root["block_entities"]:
+            assert str(be["id"]) == "minecraft:sign", be
+            x, y, z = int(be["x"]), int(be["y"]), int(be["z"])
+            assert x >> 4 == cx and z >> 4 == cz, "block entity in the wrong chunk"
+            sign_text[(x, y, z)] = [json.loads(str(be[f"Text{i}"]))["text"] for i in range(1, 5)]
         want_biomes = biomes[(cz + size // 32) * 4:(cz + size // 32) * 4 + 4, (cx + size // 32) * 4:(cx + size // 32) * 4 + 4]
         for sec in root["sections"]:
             pal = sec["block_states"]["palette"]
@@ -81,6 +88,12 @@ for path in sorted((world / "region").glob("r.*.mca")):
             assert cells == want, ("biomes differ", cx, cz)
         n_chunks += 1
 print("nbtlib: parsed", n_chunks, "chunks, expected", (size // 16) ** 2, "| biomes match in every section")
+# every sign block has its text, at the same place, and nothing else has any
+want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): lines for y, z, x, r, lines in p.build_volume.signs}
+assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_text))
+sign_blocks = int(np.isin(vol, p.SIGNS).sum())
+assert sign_blocks == len(want_text), ("sign blocks without text", sign_blocks, len(want_text))
+print(f"signs: {len(sign_text)} with their text in the chunks, e.g. {next(iter(sign_text.values()), None)}")
 assert n_chunks == (size // 16) ** 2
 
 # 2. blocks read back with anvil-parser2 match what the converter meant to place
