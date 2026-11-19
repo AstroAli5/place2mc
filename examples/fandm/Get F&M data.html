@@ -389,7 +389,8 @@ async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPerf, fetc
 
 
   // buildings the map does not have: patches of at least 30 m2, at least 3 m up, where nearly every echo is a lone one
-  // (a hard roof; trees give several echoes per pulse), away from the mapped buildings
+  // (a hard roof; trees give several echoes per pulse), beyond the mapped outlines; next to a mapped building, from 4 m2
+  // (a tower, a porch or a bay its outline leaves out)
   const hard = new Uint8Array(cells);
   for (let i = 0; i < cells; i++) {
     if (grown[i] || !Number.isFinite(single[i]) || single[i] - dtm[i] < 3) continue;
@@ -402,16 +403,19 @@ async function extractLidar({ eptBase, lat0, lon0, size, elements, LazPerf, fetc
   for (let s0 = 0; s0 < cells; s0++) {
     if (!hard[s0] || label[s0]) continue;
     const members = [];
+    let touches = false;                                  // part of a mapped building: a tower or a bay the outline misses
     label[s0] = ++nextLabel; stack.push(s0);
     while (stack.length) {
       const i = stack.pop(); members.push(i);
       const z = i / size | 0, x = i % size;
       for (const [dz, dx] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
         const zz = z + dz, xx = x + dx, j = zz * size + xx;
-        if (zz >= 0 && xx >= 0 && zz < size && xx < size && hard[j] && !label[j]) { label[j] = nextLabel; stack.push(j); }
+        if (zz < 0 || xx < 0 || zz >= size || xx >= size) continue;
+        if (grown[j]) touches = true;
+        if (hard[j] && !label[j]) { label[j] = nextLabel; stack.push(j); }
       }
     }
-    if (members.length >= 30) for (const i of members) extra[i] = 1;
+    if (members.length >= 30 || (touches && members.length >= 4)) for (const i of members) extra[i] = 1;
   }
   // trees: the canopy is everything the first echoes hit above the ground, away from buildings
   const chm = new Float32Array(cells);
