@@ -91,7 +91,7 @@ VIEWER = Path(__file__).resolve().parent / "app" / "walk.html"
 
 
 def export(vol, out_path, spawn, name, textures="auto", credit="Map data © OpenStreetMap contributors", latlon=None,
-           signs=()):
+           signs=(), spawn_yaw=None):
     """Write the walk-through HTML file. spawn: where the feet are, in Minecraft coordinates (x, y, z), as
     choose_spawn gives it; the centre of the built square is x=0, z=0."""
     out_path = Path(out_path)
@@ -115,6 +115,7 @@ def export(vol, out_path, spawn, name, textures="auto", credit="Map data © Open
         "format": 1, "name": name, "credit": credit, "sizeX": int(vol.shape[2]), "sizeZ": int(vol.shape[1]), "layers": layers,
         "yMin": p.Y_MIN,
         "spawn": [spawn[0] + vol.shape[2] // 2 + 0.5, spawn[1] - p.Y_MIN, spawn[2] + vol.shape[1] // 2 + 0.5],
+        "spawnYaw": spawn_yaw,
         "lightmap": [round(float(v), 4) for v in mcrender.LIGHTMAP],
         "faceShade": mcrender.FACE_SHADE, "aoLevels": [float(v) for v in mcrender.AO_LEVELS],
         "zenith": [round(float(v), 4) for v in mcrender.ZENITH], "horizon": [round(float(v), 4) for v in mcrender.HORIZON],

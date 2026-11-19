@@ -3063,14 +3063,16 @@ def safe_folder_name(text):
     return " ".join(keep.split())[:60] or "place2mc world"
 
 
-def choose_spawn(vol, ground, surface):
-    """A spot on a street or path near the middle with room to stand, in Minecraft coordinates (x, y, z)."""
+def choose_spawn(vol, ground, surface, near=None):
+    """A spot on a street or path near the middle (or near `near`, (x, z) in blocks from the north-west corner) with
+    room to stand, in Minecraft coordinates (x, y, z)."""
     size = ground.shape[0]
     zz, xx = np.indices(ground.shape)
+    cx, cz = near if near is not None else (size / 2, size / 2)
     standable = np.isin(ground, STREET_SURFACES) | np.isin(ground, (S_GRASS, S_PARK, S_LAWN))
     feet = np.minimum(surface + 1, vol.shape[0] - 3)
     standable &= (vol[feet, zz, xx] == AIR) & (vol[feet + 1, zz, xx] == AIR) & (vol[surface, zz, xx] != WATER)
-    order = np.argsort(((zz - size / 2) ** 2 + (xx - size / 2) ** 2).ravel(), kind="stable")
+    order = np.argsort(((zz - cz) ** 2 + (xx - cx) ** 2).ravel(), kind="stable")
     for cell in order:
         z, x = divmod(int(cell), size)
         if standable[z, x]:
@@ -3196,6 +3198,8 @@ def main():
                     help="do not add buildings and land cover from Overture Maps where OpenStreetMap has none")
     ap.add_argument("--overture-file", help="use Overture data saved earlier with --save-overture (works offline)")
     ap.add_argument("--save-overture", help="save the Overture data downloaded for this area to a .json file")
+    ap.add_argument("--spawn", help="LAT,LON[,FACING]: start there instead of near the middle, looking FACING degrees "
+                                    "from north (90 = east) in the walk-through")
     ap.add_argument("--lidar", help="a LiDAR summary made by app/lidar.js for this centre and size: the real ground, the "
                                     "measured roof of every building and every tree at its real height")
     ap.add_argument("--tags", help='a .json file of map tags to add (colours, materials, floors) where the map has '
@@ -3325,16 +3329,23 @@ def main():
             print(f"Picture: {path}")
     if args.preview_only:
         return
-    spawn = choose_spawn(vol, ground, build_volume.surface)
+    near, spawn_yaw = None, None
+    if args.spawn:                          # LAT,LON[,FACING]: where to start, and which way to look (degrees, 0 north)
+        parts = [float(v) for v in args.spawn.split(",")]
+        m_lat, m_lon = metres_per_degree(lat)
+        near = ((parts[1] - lon) * m_lon + size / 2, (lat - parts[0]) * m_lat + size / 2)
+        spawn_yaw = math.radians(parts[2]) if len(parts) > 2 else None
+    spawn = choose_spawn(vol, ground, build_volume.surface, near)
     biomes = biome_map(ground)
     world_name = safe_folder_name(args.new_world or label)
     if not args.no_walk:
         sys.path.insert(0, str(Path(__file__).resolve().parent))      # walkdata.py and mcrender.py sit next to this file
         import walkdata
         credit = "Map data © OpenStreetMap contributors" + (
-            ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "")
+            ", Overture Maps Foundation, ESA WorldCover" if any(e.get("id", 0) >= 9_000_000_000_000 for e in elements) else "") + (
+            " · Heights: USGS 3DEP LiDAR" if lidar is not None else "")
         walk = walkdata.export(vol, out_dir / f"Walk around {world_name}.html", spawn, world_name, textures=args.textures,
-                               credit=credit, latlon=(lat, lon), signs=getattr(build_volume, "signs", ()))
+                               credit=credit, latlon=(lat, lon), signs=getattr(build_volume, "signs", ()), spawn_yaw=spawn_yaw)
         print(f"Walk-through: {walk} (open it in a browser to walk around, no Minecraft needed)")
         print(f"WALK: {walk.resolve()}")
     if args.edition in ("bedrock", "both"):

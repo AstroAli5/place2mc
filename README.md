@@ -196,8 +196,10 @@ as it really is; buildings the map is missing are added from the scan; and the g
    It saves `place2mc-data.json`: the map and the scan, boiled down (about 1.5 MB for 1.5 km x 1.5 km).
 2. `python place2mc.py --osm-file place2mc-data.json --lidar place2mc-data.json --center LAT,LON --radius SIZE/2`
 
+![Old Main at Franklin & Marshall College, from the laser scan](docs/fandm-oldmain.jpg)
+
 Example: [Franklin & Marshall College](examples/fandm), Lancaster, Pennsylvania, from the 2019 scan (11.4 million laser
-points). On the 86 named buildings, 93.5% of the roof is within 1 m of the scan; Old Main's tower comes out 36 blocks
+points); [walk around it](https://raw.githack.com/AstroAli5/place2mc/main/examples/fandm/Walk%20around%20Franklin%20%26%20Marshall%20College.html). On the 86 named buildings, 93.5% of the roof is within 1 m of the scan; Old Main's tower comes out 36 blocks
 tall (the scan says 36.0 m, the college archives 121 ft, 36.9 m).
 
 ## Any place on Earth
