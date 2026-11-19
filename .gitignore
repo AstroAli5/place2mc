@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 tests/ldbcheck/target/
 tests/ldbcheck/Cargo.lock
+place2mc_preview.png
