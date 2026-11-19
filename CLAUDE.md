@@ -114,6 +114,10 @@ Old Main's tower 36 blocks (scan 36.0 m, archives 121 ft = 36.9 m). Tags: every 
 Steinman checked on photos), sloped roofs slate #505055 (-> deepslate tiles; #56575c gave dark prismarine), Steinman
 white flat roof, Winter Visual Arts Center (2020, after the scan) 3 storeys 15 m white/glass from published facts.
 Fixed: inland water with hills crashed (real[sea].max() on no sea); world names keep & ' ( ).
+Also: --spawn LAT,LON[,FACING] (choose_spawn near a point; walk.html info.spawnYaw); the walk-through credits the
+USGS scan. F&M delivered to Ali's Downloads (Java zip, .mcworld, walk-through) and published as a claude.ai page; the
+walk-through is in examples/fandm (raw.githack.com link in its README). Not checked: the real game, leaf season (trees
+are summer-green), colours of buildings other than Old Main and Steinman (assumed brick), the interiors (made up).
 
 ## State (v1.7)
 
