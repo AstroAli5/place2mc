@@ -32,7 +32,10 @@ def node(x, z, **tags):
 ELEMENTS = []
 for el in [
     way([(-100, 0), (-75, 0), (100, 0)], highway="residential", name="Long Street"),
-    way([(-75, 0), (-75, 22)], highway="residential", name="Beyers Naudé Drive"),       # a T-junction
+    way([(-75, 0), (-75, 8), (-75, 22)], highway="residential", name="Beyers Naudé Drive"),   # a T-junction
+    node(-75, 8, highway="stop"),                       # drivers coming north up Beyers Naudé Drive must stop
+    node(10, 6, highway="bus_stop", name="Market Square", shelter="yes"),
+    node(-50, 5, emergency="fire_hydrant"), node(0, 6, amenity="waste_basket"), node(60, -6, highway="street_lamp"),
     node(25, 0, highway="crossing", crossing="uncontrolled", crossing_ref="zebra"),
     way([(-20, -7), (-20, 7)], highway="footway", footway="crossing", crossing="marked"),
     way([(12, 16), (22, 16), (22, 26), (12, 26), (12, 16)], building="house"),
@@ -43,7 +46,8 @@ for el in [
     way([(-100, -55), (0, -55), (50, -85), (62, -85)], railway="rail"),
     way([(62, -85), (98, -85)], railway="rail", bridge="yes", layer="1"),          # over the road below
     way([(98, -85), (110, -85)], railway="rail"),
-    way([(80, -112), (80, -60)], highway="residential"),
+    way([(80, -112), (80, -100), (80, -60)], highway="residential"),
+    node(80, -100, highway="give_way", direction="forward"),      # for traffic going south (the way's direction)
     way([(-60, 85), (110, 85)], waterway="river", width="12"),
     way([(30, 55), (30, 70)], highway="secondary"),
     way([(30, 70), (30, 100)], highway="secondary", bridge="yes", layer="1"),       # over the river
@@ -225,7 +229,7 @@ if depth < 4:
     problems.append(f"lake only {depth} blocks deep in the middle")
 # street-name signs at the T-junction (-75, 0): one for each street, on a post beside it, facing the crossing
 signs = p.build_volume.signs
-names = {" ".join(l for l in lines if l): (y, z, x, r, lines) for y, z, x, r, lines in signs}
+names = {" ".join(l for l in lines if l): (y, z, x, r, lines) for y, z, x, r, lines, colour in signs}
 print("street-name signs:", {n: (v[1], v[2], v[3], v[4]) for n, v in names.items()})
 jz, jx = cell(-75, 0)
 for want in ("Long Street", "Beyers Naudé Drive"):
@@ -244,5 +248,36 @@ for want in ("Long Street", "Beyers Naudé Drive"):
         problems.append(f"the {want} sign turns its back on the crossing (rotation {r})")
 if names.get("Beyers Naudé Drive", (0, 0, 0, 0, []))[4] != ["", "Beyers Naudé", "Drive", ""]:
     problems.append(f"sign lines: {names.get('Beyers Naudé Drive')}")
+# road signs, the bus stop, a hydrant, a bin and a street lamp from the map. The test place (52 N, 5 E) keeps right.
+by_text = {(lines[1] or lines[0]): (y, z, x, r, lines, colour) for y, z, x, r, lines, colour in signs}
+print("road signs:", {k: v[1:4] + (v[5],) for k, v in by_text.items() if k in ("STOP", "GIVE WAY", "Market Square")})
+stop, give = by_text.get("STOP"), by_text.get("GIVE WAY")
+bus = next(((y, z, x, r, lines, colour) for y, z, x, r, lines, colour in signs if lines[0] == "BUS"), None)
+if not stop or vol[stop[0], stop[1], stop[2]] != p.STOP_SIGNS[stop[3] // 2] or stop[3] != 0:
+    problems.append(f"stop sign missing or not facing south towards the drivers: {stop}")
+elif not stop[2] > cell(-75, 8)[1]:
+    problems.append("the stop sign is not on the right-hand side of the road")
+if not give or give[5] != "red" or vol[give[0], give[1], give[2]] != p.GIVE_WAY_SIGNS[give[3] // 2] or give[3] != 8:
+    problems.append(f"give way sign missing, not red or not facing north towards the drivers: {give}")
+elif not give[2] < cell(80, -100)[1]:
+    problems.append("the give way sign is not on the right-hand side of the road for traffic going south")
+if not bus or bus[4][:2] != ["BUS", "Market Square"] or bus[3] != 4:
+    problems.append(f"bus stop sign wrong: {bus}")
+else:
+    y, z, x = bus[0] - 2, bus[1], bus[2]
+    glass = int((vol[y:y + 2, z - 3:z + 4, x - 1:x + 6] == p.GLASS).sum())
+    roof = int((vol[y + 2, z - 3:z + 4, x - 1:x + 6] == p.PAVING_SLAB).sum())
+    print(f"bus shelter: {glass} glass blocks, {roof} roof slabs")
+    if glass != 8 or roof != 8:
+        problems.append(f"bus shelter not built: {glass} glass, {roof} roof slabs")
+for what, block_, (fx, fz) in (("fire hydrant", p.HYDRANT, (-50, 5)), ("litter bin", p.LITTER_BIN, (0, 6)),
+                               ("street lamp", p.LANTERN, (60, -6))):
+    cz, cx = cell(fx, fz)
+    if not (vol[:, cz - 3:cz + 4, cx - 3:cx + 4] == block_).any():
+        problems.append(f"no {what} near where the map has one")
+cz, cx = cell(60, -6)
+lanterns = np.argwhere(vol[:, cz - 15:cz + 16, cx - 15:cx + 16] == p.LANTERN)
+if len(lanterns) != 1:
+    problems.append(f"{len(lanterns)} lamps within 15 blocks of the mapped one (made-up lamps should keep away)")
 print("\n".join(problems[:20]) if problems else "details OK")
 sys.exit(1 if problems else 0)

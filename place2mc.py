@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.5"
+VERSION = "1.6"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -144,6 +144,11 @@ UNDERWATER_PLANTS = (SEAGRASS, *TALL_SEAGRASS, KELP, KELP_PLANT)
 # street-name signs: a dark board with white letters on a post, turned in 16 steps like the game's standing signs
 # (rotation 0 faces south, 4 west, 8 north, 12 east)
 SIGNS = [block("dark_oak_sign", rotation=str(r)) for r in range(16)]
+# road signs from the map (eight directions each): STOP in white on a red board, GIVE WAY in red on a white one
+STOP_SIGNS = [block("crimson_sign", rotation=str(r)) for r in range(0, 16, 2)]
+GIVE_WAY_SIGNS = [block("birch_sign", rotation=str(r)) for r in range(0, 16, 2)]
+HYDRANT = block("red_nether_brick_wall", up="true", **{side: "none" for side in ("north", "south", "west", "east")})
+LITTER_BIN = block("composter", level="0")             # an empty composter: a wooden bin
 
 # ---------------------------------------------------------------------------------------------- climate
 # Every place gets the biome, grass colour, bare ground and trees of its climate, from the Köppen-Geiger map of
@@ -301,7 +306,8 @@ BLOCK_RGB = {
     "dirt": (134, 96, 67), "polished_blackstone_bricks": (48, 42, 50), "stone": (125, 125, 125),
     "dark_prismarine": (52, 92, 76), "red_nether_bricks": (69, 7, 9), "yellow_terracotta": (186, 133, 35),
     "light_gray_terracotta": (135, 107, 98), "oak_fence": (168, 136, 84), "bookshelf": (117, 94, 59),
-    "dark_oak_sign": (68, 44, 22),
+    "dark_oak_sign": (68, 44, 22), "crimson_sign": (101, 48, 70), "birch_sign": (196, 180, 122),
+    "red_nether_brick_wall": (69, 7, 9), "composter": (112, 70, 31),
     "spruce_slab": (114, 84, 48), "black_concrete": (8, 10, 15), "red_concrete": (142, 33, 33),
     "lime_concrete": (94, 169, 24), "yellow_concrete": (241, 175, 21), "blue_concrete": (45, 47, 143), "dark_prismarine_stairs": (52, 92, 76),
     "red_nether_brick_stairs": (69, 7, 9), "polished_andesite_stairs": (134, 136, 136), "stone_brick_wall": (122, 122, 122), "brick_wall": (150, 97, 83), "oak_leaves": (58, 128, 44), "rail": (110, 96, 80),
@@ -433,6 +439,9 @@ def overpass_query(lat, lon, radius):
   node["highway"="crossing"];
   node["amenity"="bench"];
   node["highway"="traffic_signals"];
+  node["highway"~"^(stop|give_way|bus_stop|street_lamp)$"];
+  node["emergency"="fire_hydrant"];
+  node["amenity"="waste_basket"];
 );
 out geom;"""
 
@@ -589,6 +598,9 @@ def load_osm_file(path):
         return parse_osm_xml(fh)
 
 
+POINT_HIGHWAYS = ("crossing", "traffic_signals", "stop", "give_way", "bus_stop", "street_lamp")
+
+
 def parse_osm_xml(fh):
     """OpenStreetMap XML (an .osm export, or the map service's answer) -> (elements, bounds or None), in the
     same form as an Overpass answer. Keeps tagged ways and relations, and the points place2mc uses."""
@@ -601,7 +613,8 @@ def parse_osm_xml(fh):
                 nid, lat, lon = int(el.get("id")), float(el.get("lat")), float(el.get("lon"))
                 nodes[nid] = (lat, lon)
                 tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-                if tags.get("natural") == "tree" or tags.get("highway") in ("crossing", "traffic_signals") or tags.get("amenity") == "bench":
+                if tags.get("natural") == "tree" or tags.get("highway") in POINT_HIGHWAYS or \
+                        tags.get("amenity") in ("bench", "waste_basket") or tags.get("emergency") == "fire_hydrant":
                     elements.append({"type": "node", "id": nid, "lat": lat, "lon": lon, "tags": tags})
                 el.clear()
             elif el.tag == "way":
@@ -797,6 +810,7 @@ def build_map(elements, lat0, lon0, size, climate=None):
     crossing_ways, crossing_nodes, barriers, benches, campuses, industrial, signals = [], [], [], [], [], [], []
     bridges = []          # (width, surface class, line, layer, is a railway)
     streets = []          # (name or "", width, line) of every road cars drive on
+    furniture = []        # (kind, x, z, tags): stop and give-way signs, bus stops, lamps, hydrants, bins
     for el in elements:
         tags = el.get("tags") or {}
         kind = el.get("type")
@@ -809,6 +823,14 @@ def build_map(elements, lat0, lon0, size, climate=None):
                 benches.append(px((el["lat"], el["lon"])))
             elif tags.get("highway") == "traffic_signals":
                 signals.append(px((el["lat"], el["lon"])))
+            else:                                       # road signs, bus stops, lamps, hydrants and bins
+                kind_ = {"stop": "stop", "give_way": "give_way", "bus_stop": "bus_stop",
+                         "street_lamp": "lamp"}.get(tags.get("highway")) or (
+                    "hydrant" if tags.get("emergency") == "fire_hydrant" else
+                    "bin" if tags.get("amenity") == "waste_basket" else None)
+                if kind_:
+                    x_, z_ = px((el["lat"], el["lon"]))
+                    furniture.append((kind_, x_, z_, tags))
             continue
         if kind == "way":
             geom = [(p["lat"], p["lon"]) for p in el.get("geometry") or [] if p]
@@ -1108,7 +1130,8 @@ def build_map(elements, lat0, lon0, size, climate=None):
         for x, y in line_cells(line, size):
             track[y, x] = True
     build_map.details = {"barriers": (barrier_kind, barrier_tall), "rails": track, "bridges": bridges,
-                         "streets": streets,
+                         "streets": streets, "furniture": furniture, "left_traffic": drives_on_left(lat0, lon0),
+                         "give_way_text": "YIELD" if 15 <= lat0 <= 72 and -170 <= lon0 <= -50 else "GIVE WAY",
                          "signals": [(int(x), int(y)) for x, y in signals if 0 <= x < size and 0 <= y < size],
                          "benches": [(int(x), int(y)) for x, y in benches if 0 <= x < size and 0 <= y < size]}
     sea_arr = np.array(sea) > 0 if sea is not None else np.zeros((size, size), dtype=bool)
@@ -1475,6 +1498,71 @@ def plan_street_signs(streets, size):
             used.append((x, z, name))
             done.add(name)
     return plans
+
+
+# where traffic keeps left (about 75 countries). Rough boxes (south, west, north, east): good away from the borders
+# of right-hand neighbours, so a road sign near such a border can stand on the other side of the road.
+LEFT_TRAFFIC = [
+    (51.0, -11.0, 61.0, 2.0), (49.95, -11.0, 51.0, 1.5),     # Britain and Ireland (not the French coast)
+    (35.8, 14.1, 36.1, 14.6), (34.5, 32.2, 35.8, 34.7),     # Malta, Cyprus
+    (-35.0, 11.0, -17.5, 41.0),        # South Africa, Lesotho, Eswatini, Namibia, Botswana, Zimbabwe, Mozambique
+    (-17.5, 22.5, -13.5, 41.0), (-13.5, 30.5, -8.0, 41.0),  # Zambia, Malawi, northern Mozambique, south Tanzania
+    (-8.0, 31.0, 4.5, 42.0), (-1.0, 30.0, 4.5, 31.0),       # Tanzania, Kenya, Uganda
+    (5.0, 66.0, 30.0, 92.5), (30.0, 70.5, 37.0, 80.0),      # India, Pakistan, Bangladesh, Nepal, Bhutan, Sri Lanka
+    (12.5, 99.0, 18.0, 102.0), (14.4, 102.0, 18.0, 105.6),  # Thailand: the middle, the north-east,
+    (18.0, 98.5, 20.4, 100.5), (5.6, 98.2, 12.5, 102.0),    # the north, the south
+    (-11.0, 95.0, 7.5, 119.5), (-11.0, 119.5, 4.5, 141.0),  # Malaysia, Singapore, Brunei, Indonesia, Timor
+    (22.1, 113.5, 22.6, 114.5),        # Hong Kong, Macau
+    (30.5, 129.5, 41.6, 142.1), (41.3, 139.3, 45.6, 146.0), (24.0, 122.5, 30.5, 132.0),   # Japan
+    (-48.0, 112.0, -1.0, 162.0), (-48.0, 165.0, -33.0, 179.9),  # Australia, Papua New Guinea, New Zealand
+    (3.0, -60.5, 9.0, -54.0),          # Guyana, Suriname
+    (17.5, -78.5, 18.6, -76.0), (22.6, -80.0, 27.5, -72.5),  # Jamaica, the Bahamas
+    (10.0, -62.0, 13.5, -59.0),        # Trinidad and Tobago, Barbados, the Windwards
+]
+
+
+def drives_on_left(lat, lon):
+    return any(s <= lat <= n and w <= lon <= e for s, w, n, e in LEFT_TRAFFIC)
+
+
+def nearest_road(streets, x, z, reach=20):
+    """The road nearest to (x, z) within `reach` blocks: (distance, index of the road, index of its segment,
+    unit direction of that segment as drawn, closest point), or None."""
+    best = None
+    for i, (_, width, line) in enumerate(streets):
+        for k in range(len(line) - 1):
+            (x0, z0), (x1, z1) = line[k], line[k + 1]
+            dx, dz = x1 - x0, z1 - z0
+            seg = dx * dx + dz * dz
+            if seg < 1e-6:
+                continue
+            t = min(1, max(0, ((x - x0) * dx + (z - z0) * dz) / seg))
+            cx, cz = x0 + t * dx, z0 + t * dz
+            d = math.hypot(x - cx, z - cz)
+            if d <= reach and (best is None or d < best[0]):
+                length = math.sqrt(seg)
+                best = (d, i, k, (dx / length, dz / length), (cx, cz))
+    return best
+
+
+def facing_rotation(fx, fz, steps=16):
+    """The standing-sign rotation (0-15) that faces the direction (fx, fz); steps=8 keeps to even rotations."""
+    r = math.degrees(math.atan2(-fx, fz)) / 22.5
+    if steps == 8:
+        return int(round(r / 2)) * 2 % 16
+    return int(round(r)) % 16
+
+
+def free_spot(keep_off, x, z, size, reach=3):
+    """The cell nearest to (x, z) that is not in keep_off, within `reach` blocks, as (x, z) ints, or None."""
+    ix, iz = int(x), int(z)
+    for r in range(reach + 1):
+        cells = [(ix + dx, iz + dz) for dx in range(-r, r + 1) for dz in range(-r, r + 1) if max(abs(dx), abs(dz)) == r]
+        cells.sort(key=lambda c: (c[0] + 0.5 - x) ** 2 + (c[1] + 0.5 - z) ** 2)
+        for cx, cz in cells:
+            if 2 <= cx < size - 2 and 2 <= cz < size - 2 and not keep_off[cz, cx]:
+                return cx, cz
+    return None
 
 
 def build_bridges(vol, bridges, g, level, water, ground, has_building, ground_track=None, bed=None):
@@ -1946,7 +2034,23 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
     road = np.isin(ground, (S_ROAD, S_LINE))
     lamp_ok = (ground == S_SIDEWALK) & (window_fraction(road, 1) > 0) & ~(window_fraction(has_building, 1) > 0)
     blocked = np.zeros((size, size), dtype=bool)
-    lamps = 0
+    lamps = real_lamps = 0
+    # the street lamps the map has, where it has them; the made-up ones below keep 16 blocks away from these
+    keep_lamp = np.isin(ground, (S_ROAD, S_LINE, S_PARKING)) | has_building | water
+    for kind_, fx, fz, _ in details.get("furniture", []):
+        spot = free_spot(keep_lamp, fx, fz, size) if kind_ == "lamp" else None
+        if spot is None:
+            continue
+        x, z = spot
+        y = int(g[z, x]) + 1
+        if y + 6 >= vol.shape[0] or (vol[y:y + 5, z, x] != AIR).any():
+            continue
+        vol[y:y + 4, z, x] = LAMP_POST
+        vol[y + 4, z, x] = LANTERN
+        blocked[max(0, z - 16):z + 17, max(0, x - 16):x + 17] = True
+        taken[z, x] = True
+        lamps += 1
+        real_lamps += 1
     for cell in rng.permutation(np.flatnonzero(lamp_ok)):
         z, x = divmod(int(cell), size)
         y = int(g[z, x]) + 1
@@ -2175,7 +2279,101 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
         vol[y + 1, z, x] = SIGNS[rotation]
         if vol[y + 2, z, x] in low:
             vol[y + 2, z, x] = AIR
-        signs.append((y + 1, z, x, rotation, sign_lines(name)))
+        signs.append((y + 1, z, x, rotation, sign_lines(name), "white"))
+
+    street_signs = len(signs)
+    # road signs, bus stops, hydrants and bins from the map
+    left = details.get("left_traffic", False)
+    streets = details.get("streets", [])
+    seat = ROOF_STAIRS[block("spruce_planks")]
+    placed = {"stop signs": 0, "give way signs": 0, "bus stops": 0, "bus shelters": 0, "fire hydrants": 0,
+              "litter bins": 0}
+
+    def free_column(x, z, height):
+        y = int(g[z, x]) + 1
+        if y + height + 1 >= vol.shape[0] or any(vol[y + k, z, x] not in low for k in range(height)):
+            return None
+        return y
+
+    for kind_, fx, fz, tags in details.get("furniture", []):
+        if kind_ in ("hydrant", "bin"):
+            spot = free_spot(keep_off, fx, fz, size)
+            y = spot and free_column(spot[0], spot[1], 2)
+            if y:
+                vol[y, spot[1], spot[0]] = HYDRANT if kind_ == "hydrant" else LITTER_BIN
+                placed["fire hydrants" if kind_ == "hydrant" else "litter bins"] += 1
+            continue
+        if kind_ not in ("stop", "give_way", "bus_stop"):
+            continue
+        near = nearest_road(streets, fx, fz, reach=15)
+        if near is None:
+            continue
+        dist, i, k, (dx, dz), (cx, cz) = near
+        width, line = streets[i][1], streets[i][2]
+        if kind_ == "bus_stop":
+            # traffic on the stop's side of the road: with the way as drawn on the right in right-hand countries
+            on_right = (fx - cx) * -dz + (fz - cz) * dx >= 0 if dist >= width / 2 + 0.5 else not left
+            tx, tz = (dx, dz) if on_right != left else (-dx, -dz)
+        else:
+            # which way the traffic that must stop goes: the direction tag, else towards the nearer end of the road
+            way_dir = tags.get(f"{kind_}:direction") or tags.get("direction") or tags.get("traffic_sign:direction")
+            if way_dir not in ("forward", "backward"):
+                lengths = [math.dist(line[j], line[j + 1]) for j in range(len(line) - 1)]
+                done = sum(lengths[:k]) + math.dist(line[k], (cx, cz))
+                way_dir = "forward" if sum(lengths) - done < done else "backward"
+            tx, tz = (dx, dz) if way_dir == "forward" else (-dx, -dz)
+        sx, sz = (tz, -tx) if left else (-tz, tx)          # the kerb side for that traffic: left or right of it
+        if kind_ == "bus_stop" and dist >= width / 2 + 0.5:
+            px_, pz_ = fx, fz                                 # mapped beside the road, where the pole stands
+        else:
+            px_, pz_ = cx + sx * (width / 2 + 1.2), cz + sz * (width / 2 + 1.2)
+        spot = free_spot(keep_off, px_, pz_, size)
+        if spot is None:
+            continue
+        x, z = spot
+        tall = 3 if kind_ == "bus_stop" else 2
+        y = free_column(x, z, tall + 1)
+        if y is None:
+            continue
+        if kind_ == "bus_stop":                             # a pole with the sign on top, facing the oncoming bus
+            rotation = facing_rotation(-tx, -tz)
+            vol[y:y + 2, z, x] = FENCES[0]
+            vol[y + 2, z, x] = SIGNS[rotation]
+            name = (tags.get("name") or "").strip()
+            words = [l for l in sign_lines(name) if l][:3] if name else []
+            lines = ["BUS"] + words + [""] * (3 - len(words)) if words else ["", "BUS", "STOP", ""]
+            signs.append((y + 2, z, x, rotation, lines, "white"))
+            placed["bus stops"] += 1
+            if tags.get("shelter") == "yes":                # a glass shelter behind the pole, along the road
+                ux, uz = (1, 0) if abs(tx) >= abs(tz) else (0, 1)
+                ux, uz = (ux, uz) if ux * tx + uz * tz >= 0 else (-ux, -uz)
+                vx, vz = (1, 0) if abs(sx) >= abs(sz) else (0, 1)
+                vx, vz = (vx, vz) if vx * sx + vz * sz >= 0 else (-vx, -vz)
+                cells = [(x + ux * a + vx * b, z + uz * a + vz * b) for a in range(1, 5) for b in (0, 1)]
+                if all(2 <= cx_ < size - 2 and 2 <= cz_ < size - 2 and not keep_off[cz_, cx_] and
+                       int(g[cz_, cx_]) + 1 == y and all(vol[y + h, cz_, cx_] in low for h in range(3))
+                       for cx_, cz_ in cells):
+                    back = {(0, -1): NORTH, (0, 1): SOUTH, (-1, 0): WEST, (1, 0): EAST}[(vx, vz)]
+                    for a in range(1, 5):
+                        for b in (0, 1):
+                            cx_, cz_ = x + ux * a + vx * b, z + uz * a + vz * b
+                            vol[y:y + 2, cz_, cx_] = GLASS if b == 1 else AIR
+                            vol[y + 2, cz_, cx_] = PAVING_SLAB
+                            if b == 0 and a in (2, 3):
+                                vol[y, cz_, cx_] = seat[back]          # a bench with its back to the glass
+                    placed["bus shelters"] += 1
+        else:
+            rotation = facing_rotation(-tx, -tz, steps=8)  # facing the drivers who must stop
+            vol[y, z, x] = FENCES[0]
+            if kind_ == "stop":
+                vol[y + 1, z, x] = STOP_SIGNS[rotation // 2]
+                signs.append((y + 1, z, x, rotation, ["", "STOP", "", ""], "white"))
+                placed["stop signs"] += 1
+            else:
+                vol[y + 1, z, x] = GIVE_WAY_SIGNS[rotation // 2]
+                signs.append((y + 1, z, x, rotation, ["", details.get("give_way_text", "GIVE WAY"), "", ""], "red"))
+                placed["give way signs"] += 1
+        keep_off[max(0, z - 1):z + 2, max(0, x - 1):x + 2] = True
     build_volume.signs = signs
     for y, oz, ox in doorways:                         # keep the way out of every door clear (on a slope this
         vol[y:y + 2, oz, ox] = AIR                     # digs a doorway into the hillside), done last so nothing
@@ -2186,7 +2384,7 @@ def build_volume(ground, bmap, specs, trees, seed=0, terrain=None, details=None,
                           "pieces of furniture and lamps inside": furnished, "inner wall blocks": inner_walls, "parked cars": cars, "traffic lights": signals,
                           "bridge blocks": bridge_blocks, "rails on bridges": bridge_rails,
                           "seagrass": water_life["seagrass"], "kelp stalks": water_life["kelp"],
-                          "street-name signs": len(signs)}
+                          "street-name signs": street_signs, "street lamps from the map": real_lamps, **placed}
     build_volume.surface = np.where(water, level, top_of_ground)
     return vol, planted
 
@@ -2314,14 +2512,14 @@ def encode_section(blocks, section_y, biomes=None):
             + nbt_compound("biomes", biome_tag) + b"\x00")
 
 
-def sign_entity(x, y, z, lines):
+def sign_entity(x, y, z, lines, colour="white"):
     """A sign's text, as Minecraft 1.18 stores it (four JSON lines; the game moves them to the front of the sign when
     it upgrades the chunk). x, y, z: world coordinates."""
     payload = nbt_string("id", "minecraft:sign") + nbt_int("x", x) + nbt_int("y", y) + nbt_int("z", z)
     payload += nbt_byte("keepPacked", 0)
     for i, line in enumerate(lines[:4]):
         payload += nbt_string(f"Text{i + 1}", json.dumps({"text": line}, ensure_ascii=False))
-    return payload + nbt_string("Color", "white") + nbt_byte("GlowingText", 0) + b"\x00"
+    return payload + nbt_string("Color", colour) + nbt_byte("GlowingText", 0) + b"\x00"
 
 
 def encode_chunk(column, cx, cz, biomes=None, entities=()):
@@ -2362,12 +2560,13 @@ def write_region(path, chunks):
 
 
 def write_world(vol, world_dir, biomes=None, signs=()):
-    """signs: (layer, z, x, rotation, lines) for the text of every sign block (build_volume.signs)."""
+    """signs: (layer, z, x, rotation, lines, colour) for the text of every sign block (build_volume.signs)."""
     size = vol.shape[1]
     offset = size // 32            # chunk number of the west/north edge is -offset
     by_chunk = {}
-    for y, z, x, _, lines in signs:
-        by_chunk.setdefault((x // 16, z // 16), []).append(sign_entity(x - size // 2, y + Y_MIN, z - size // 2, lines))
+    for y, z, x, _, lines, colour in signs:
+        by_chunk.setdefault((x // 16, z // 16), []).append(
+            sign_entity(x - size // 2, y + Y_MIN, z - size // 2, lines, colour))
     regions = {}
     for cz_i in range(size // 16):
         for cx_i in range(size // 16):

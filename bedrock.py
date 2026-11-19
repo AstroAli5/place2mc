@@ -272,9 +272,13 @@ def data3d(column, biomes):
     return out
 
 
-def sign_entity(x, y, z, lines):
-    """A sign's text as Bedrock saves it (the field set PocketMine-MP writes): the same name on both sides, white."""
-    side = [("Text", "string", "\n".join(lines).rstrip("\n")), ("SignTextColor", "int", -1),     # 0xFFFFFFFF, white
+SIGN_COLOURS = {"white": 0xFFFFFFFF, "red": 0xFFB02E26, "black": 0xFF000000}     # ARGB, as the game stores it
+
+
+def sign_entity(x, y, z, lines, colour="white"):
+    """A sign's text as Bedrock saves it (the field set PocketMine-MP writes): the same text on both sides."""
+    argb = SIGN_COLOURS[colour]
+    side = [("Text", "string", "\n".join(lines).rstrip("\n")), ("SignTextColor", "int", argb - (1 << 32)),
             ("IgnoreLighting", "byte", 0), ("PersistFormatting", "byte", 1)]
     return le_compound([("id", "string", "Sign"), ("x", "int", x), ("y", "int", y), ("z", "int", z),
                         ("isMovable", "byte", 1), ("FrontText", "compound", side), ("BackText", "compound", side),
@@ -282,14 +286,15 @@ def sign_entity(x, y, z, lines):
 
 
 def chunk_records(vol, biomes, palette_bytes, signs=()):
-    """signs: (layer, z, x, rotation, lines) of every sign block; their text goes in each chunk's block-entity
+    """signs: (layer, z, x, rotation, lines, colour) of every sign block; their text goes in each chunk's block-entity
     record (key type 49), one little-endian NBT compound after another."""
     size = vol.shape[1]
     offset = size // 32
     records = {}
     by_chunk = {}
-    for y, z, x, _, lines in signs:
-        by_chunk.setdefault((x // 16, z // 16), []).append(sign_entity(x - size // 2, y + p.Y_MIN, z - size // 2, lines))
+    for y, z, x, _, lines, colour in signs:
+        by_chunk.setdefault((x // 16, z // 16), []).append(
+            sign_entity(x - size // 2, y + p.Y_MIN, z - size // 2, lines, colour))
     for cz_i in range(size // 16):
         for cx_i in range(size // 16):
             cx, cz = cx_i - offset, cz_i - offset

@@ -88,6 +88,24 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
 
+## State (v1.6)
+
+v1.6: Ali: "link it with Spotify so I can play my own songs" + "more realistic, search how, edit without asking,
+update GitHub". Spotify: green button on the walk-through's start screen, paste a link (open.spotify.com/... or
+spotify:type:id, any of track/album/playlist/artist/episode/show) -> an embed iframe from open.spotify.com on that
+screen (allow encrypted-media); the generated piano stops (sound.spotify); M does not control Spotify (Esc and use
+its player); the last link is kept in localStorage. Whole songs only when logged in to Spotify in that browser,
+else 30 s previews. Not checked against the real Spotify (the workspace cannot reach it; Chrome was offline).
+Street furniture: the Overpass query and parse_osm_xml now keep node highway=stop/give_way/bus_stop/street_lamp,
+emergency=fire_hydrant, amenity=waste_basket (build_map.details["furniture"]); real lamps are placed first and
+block made-up lamps within 16; stop (crimson_sign, white STOP) and give way (birch_sign, red GIVE WAY / YIELD in
+North America) use 8 rotations, on a fence post, facing the stopping traffic (direction tag, else towards the
+nearer end of the road), on the kerb side (drives_on_left: LEFT_TRAFFIC boxes, checked on 30 cities); bus stops:
+2-post pole + dark oak sign "BUS"/name, shelter=yes -> 4x2 glass back wall, slab roof, bench; hydrant =
+red_nether_brick_wall post; bin = empty composter (5 boxes, as the game). Signs are (layer, z, x, rotation, lines,
+colour) everywhere; Java Color, Bedrock SignTextColor ARGB (bedrock.SIGN_COLOURS). 231 block states.
+Monaco's saved map has 9 bus stops (4 inside 300 m get one); ALA's saved map has none of these points.
+
 ## State (v1.5)
 
 v1.5: Ali: "continue making it more realistic, search how, edit without asking, update GitHub". Street-name
@@ -214,7 +232,7 @@ a gravel desert; campus outlines (amenity=college/school) were not downloaded; c
 
 Known limits: a few doors on steep slopes open onto a drop; big hilly areas need ~2 GB of
 memory; fences are flat-ground objects; bridges are worked out from the map alone (no real deck heights); no traffic
-signs or house numbers yet; the pictures draw signs without their text.
+signs other than stop/give way, no house numbers yet; the pictures draw signs without their text.
 
 ## Similar tools (for ideas)
 

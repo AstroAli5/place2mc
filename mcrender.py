@@ -441,6 +441,7 @@ def _make_textures(source=None):
         by_name[base + "_stairs"] = by_name[stairs.get(base, base + "_planks")]
     by_name["stone_brick_wall"] = by_name["stone_bricks"]
     by_name["dark_oak_sign"] = by_name["dark_oak_planks"]
+    by_name["birch_sign"] = by_name["birch_planks"]
     rail = np.array(by_name["gravel"], dtype=float)          # the built-in rail: wooden sleepers and two iron rails
     rail[1::4] = (rail[1::4] * 0.3 + np.array((112, 84, 52)) * 0.7)
     rail[2::4] = (rail[2::4] * 0.3 + np.array((100, 76, 46)) * 0.7)
@@ -525,6 +526,9 @@ def _shapes():
             boxes = [((0, 0, 0), (1, .5, 1))]
         elif name.endswith("_slab") and props.get("type") == "top":
             boxes = [((0, .5, 0), (1, 1, 1))]
+        elif name == "composter":                   # the game's five boxes: a floor and four walls 2 px thick
+            boxes = [((0, 0, 0), (1, 0.125, 1)), ((0, 0.125, 0), (0.125, 1, 1)), ((0.125, 0.125, 0), (1, 1, 0.125)),
+                     ((0.125, 0.125, 0.875), (1, 1, 1)), ((0.875, 0.125, 0.125), (1, 1, 0.875))]
         elif name.endswith("_sign"):                # a standing sign: the stick and the board, turned to the
             # nearest quarter here (the game turns it in 16 steps; the walk-through draws the true angle)
             quarter = int(round(int(props["rotation"]) / 4)) % 2
@@ -723,7 +727,7 @@ AO_LEVELS = np.array([0.50, 0.68, 0.84, 1.0], dtype=np.float32)
 # Slabs and stairs are lit in their own cell (light comes in from above and the sides) but, like the game,
 # their full bottom stops sky light going straight down.
 _LIGHT_PASSES = np.array([n in ("air", "glass", "light_blue_stained_glass", "gray_stained_glass", "lantern", "barrier")
-                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall", "_sign")) or n == "rail"
+                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall", "_sign")) or n in ("rail", "composter")
                           for n in _names]) | CROSS
 UNDERWATER = np.array([n in ("seagrass", "tall_seagrass", "kelp", "kelp_plant") for n in _names])   # full of water
 _DIMS_LIGHT = np.array([n.endswith("_leaves") or n == "water" for n in _names]) | UNDERWATER

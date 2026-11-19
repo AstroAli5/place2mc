@@ -43,13 +43,27 @@ saved in the Java and the Bedrock world (Bedrock shows them on both sides of the
 |---|---|
 | ![A street sign at ALA: Printech Avenue](docs/street-sign-ala.jpg) | ![A street sign in Monaco: Avenue de Roqueville](docs/street-sign-monaco.jpg) |
 
+### Road signs, bus stops and street furniture
+
+Where the map has them, the world gets them in the same spot: STOP and GIVE WAY signs (YIELD in North America)
+beside the road, facing the drivers who must stop and on their side of the road (the left in the UK, South Africa,
+India, Japan, Australia and the other left-hand-traffic countries), bus stops with their name on the sign and a
+glass shelter with a bench when the map says there is one, fire hydrants, litter bins, and street lamps where the
+real ones stand (the made-up lamps keep away from them).
+
+| | | |
+|---|---|---|
+| ![A real bus stop in Monaco: Casino](docs/bus-stop-monaco.jpg) | ![A stop sign](docs/stop-sign.jpg) | ![A bus shelter with a bench](docs/bus-shelter.jpg) |
+
 ### With sound
 
 Footsteps that sound like what you walk on (grass, stone, wood, sand, gravel, water), a thud when you land,
 birds in the day, crickets at night, waves near the sea, wind when you fly high, and everything muffled when
 your head is under water. A calm piano plays in the background: place2mc's own music, made up fresh as you walk,
 with long quiet gaps like the game's. Press M to turn it off, or N (the "Play your own music" button) to play a
-song from your own computer or phone instead; it stays on your device. Everything is made in the page with the
+song from your own computer or phone instead; it stays on your device. Or press the green Spotify button and paste
+a Spotify link (a song, an album or a playlist): Spotify's own player appears there, and the piano stops. Logged in
+to Spotify in the same browser you hear whole songs; otherwise Spotify only plays 30-second previews. Everything is made in the page with the
 Web Audio API, no sound files.
 
 <p align="center"><img src="docs/sound.png" width="760" alt="The sound of a walk at ALA: footsteps, piano notes and birds, then crickets after dark"></p>

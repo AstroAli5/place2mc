@@ -122,7 +122,8 @@ def export(vol, out_path, spawn, name, textures="auto", credit="Map data © Open
                      else "your Minecraft" if source is not None else "built-in"),
         "blocks": block_table(),
     }
-    info["signs"] = [[int(x), int(y), int(z), int(r), list(lines)] for y, z, x, r, lines in signs]   # their text
+    info["signs"] = [[int(x), int(y), int(z), int(r), list(lines), colour]                      # their text
+                     for y, z, x, r, lines, colour in signs]
     if latlon:                                  # for the sun: where it stands over this place on the day you walk
         info["lat"], info["lon"] = round(float(latlon[0]), 5), round(float(latlon[1]), 5)
     data = {"info": info, "bin": base64.b64encode(packed).decode("ascii"),

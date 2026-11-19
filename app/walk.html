@@ -23,6 +23,12 @@
   #start button { width: 100%; margin-top: 14px; padding: 11px; font-size: 17px; background: #6fa63e; color: #fff;
                   border: 0; border-bottom: 4px solid #4f7d27; border-radius: 3px; cursor: pointer; }
   #start button.small { width: auto; margin-top: 10px; padding: 7px 14px; font-size: 14px; background: #34495e; }
+  #start #spotifyBtn { background: #1db954; color: #000; }
+  #spotifyBox .spotifyRow { display: flex; gap: 6px; margin-top: 10px; }
+  #spotifyUrl { flex: 1; min-width: 0; padding: 7px 8px; font-size: 14px; border: 1px solid #5b5b5b;
+                background: #15181b; color: #f0f0f0; }
+  #spotifyPlayer iframe { display: block; width: 100%; height: 152px; border: 0; border-radius: 12px; margin-top: 8px; }
+  #spotifyNote { margin-top: 6px; font-size: 12px; }
   #start button:disabled { background: #666; border-color: #444; cursor: default; }
   #start table { border-collapse: collapse; width: 100%; color: #dfe4e8; }
   #start td { padding: 2px 0; }
@@ -61,13 +67,21 @@
     <tr><td>1 2 3 4</td><td>speed: normal, ×2, ×4, ×8</td></tr>
     <tr><td>T</td><td>time of day: morning, midday, afternoon, sunset, night, now (the real sun this minute)</td></tr>
     <tr><td>G</td><td>shaders: sun and shadows, sun only, plain Minecraft</td></tr>
-    <tr><td>M</td><td>music on / off; N: play your own music file</td></tr>
+    <tr><td>M</td><td>music on / off; N: play your own music file (or the green Spotify button)</td></tr>
     <tr><td>J</td><td>auto-jump on / off (on)</td></tr>
     <tr><td>R</td><td>back to the start</td></tr>
     <tr><td>Esc</td><td>pause</td></tr>
   </table>
   <button id="go" disabled>Loading…</button>
-  <div><button id="own" class="small">♪ Play your own music</button><input id="ownFile" type="file" accept="audio/*" hidden></div>
+  <div><button id="own" class="small">♪ Play your own music</button>
+       <button id="spotifyBtn" class="small">Spotify</button><input id="ownFile" type="file" accept="audio/*" hidden></div>
+  <div id="spotifyBox" hidden>
+    <div class="spotifyRow"><input id="spotifyUrl" placeholder="Paste a Spotify link: a song, album or playlist">
+      <button id="spotifyGo" class="small">Load</button></div>
+    <div id="spotifyPlayer"></div>
+    <div class="sub" id="spotifyNote">Press play in the Spotify player, then walk; Esc brings it back. Logged in to
+      Spotify in this browser you hear whole songs; otherwise Spotify plays 30-second previews.</div>
+  </div>
   <div id="status"></div>
 </div></div>
 
@@ -612,8 +626,9 @@ async function main() {
     const g2 = cv.getContext("2d");
     g2.fillStyle = "#fff"; g2.textAlign = "center"; g2.textBaseline = "middle";
     const verts = [];
-    SIGN_TEXT.forEach(([x, y, z, r, lines], i) => {
+    SIGN_TEXT.forEach(([x, y, z, r, lines, colour], i) => {
       const cx0 = (i % COLS) * CW, cy0 = Math.floor(i / COLS) * CH;
+      g2.fillStyle = { red: "#b02e26", black: "#111" }[colour] || "#fff";
       for (let k = 0; k < 4; k++) {
         const t = lines[k] || "";
         if (!t) continue;
@@ -873,7 +888,7 @@ async function main() {
     const ctx = sound.ctx;
     if (!ctx || ctx.state !== "running") return;
     const now = ctx.currentTime, L = lighting();
-    if (sound.music && !sound.own && now + 1 > sound.nextNote) {   // the next phrase, quieter and lower at night
+    if (sound.music && !sound.own && !sound.spotify && now + 1 > sound.nextNote) {   // the next phrase, quieter and lower at night
       const ph = newPhrase(), start = Math.max(now + 0.1, sound.nextNote);
       for (const n of ph.notes) pianoNote(start + n.at, n.midi - (L.night > 0.5 ? 12 : 0), n.vel * (L.night > 0.5 ? 0.7 : 1));
       sound.nextNote = start + ph.length + 8 + Math.random() * 14;   // and then a rest, like the game's music
@@ -904,16 +919,41 @@ async function main() {
     sound.chirps++;
   }
   function toggleMusic() {
+    if (sound.spotify) return;                    // Spotify is paused and played in its own player (Esc)
     sound.music = !sound.music;
     if (sound.own) { if (sound.music) sound.own.play(); else sound.own.pause(); }
     if (sound.musicGain) sound.musicGain.gain.setTargetAtTime(sound.music ? 0.32 : 0, sound.ctx.currentTime, 0.3);
   }
   function chooseOwnMusic() { $("ownFile").click(); }
+  // Spotify: its own player (an embed from open.spotify.com) on this screen; our piano stops while it is loaded
+  function spotifyEmbed(link) {                  // a share link or a spotify: address -> the embed page, or null
+    const m = /(?:open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?|spotify:)(track|album|playlist|artist|episode|show)[\/:]([A-Za-z0-9]{22})/
+      .exec((link || "").trim());
+    return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}?utm_source=place2mc` : null;
+  }
+  try { $("spotifyUrl").value = localStorage.getItem("place2mc.spotify") || ""; } catch (e) {}
+  $("spotifyBtn").onclick = () => { $("spotifyBox").hidden = !$("spotifyBox").hidden; if (!$("spotifyBox").hidden) $("spotifyUrl").focus(); };
+  $("spotifyGo").onclick = () => {
+    const url = spotifyEmbed($("spotifyUrl").value);
+    if (!url) { $("spotifyNote").textContent = "That is not a Spotify link. In Spotify: Share, then Copy link."; return; }
+    try { localStorage.setItem("place2mc.spotify", $("spotifyUrl").value.trim()); } catch (e) {}
+    $("spotifyPlayer").innerHTML = "";
+    const f = document.createElement("iframe");
+    f.src = url; f.title = "Spotify";
+    f.allow = "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
+    $("spotifyPlayer").appendChild(f);
+    if (sound.own) { sound.own.pause(); sound.own = null; $("own").textContent = "♪ Play your own music"; }
+    sound.spotify = url; sound.music = true;
+    startSound();
+    if (sound.musicGain) sound.musicGain.gain.setTargetAtTime(0, sound.ctx.currentTime, 0.3);   // no piano over it
+  };
+  $("spotifyUrl").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") $("spotifyGo").click(); });
   $("own").onclick = chooseOwnMusic;
   $("ownFile").onchange = e => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     if (sound.own) { sound.own.pause(); URL.revokeObjectURL(sound.own.src); }
+    if (sound.spotify) { $("spotifyPlayer").innerHTML = ""; sound.spotify = null; }     // the file replaces Spotify
     sound.own = new Audio(URL.createObjectURL(file));          // played from your own device
     sound.own.loop = true; sound.own.volume = 0.6; sound.ownName = file.name.replace(/\.[^.]+$/, "");
     sound.music = true;
@@ -1331,7 +1371,7 @@ async function main() {
       `${dragLook && !TOUCH ? "\nDrag with the mouse to look around" : ""}\nSpeed ×${SPEEDS[speedLevel]}   Render distance: ${renderDistance} chunks   ${fps} fps` +
       `\nTime: ${TIMES[timeIndex][0]} (${clock(L.hour)} sun time, the real sun for this place today)   ` +
       `Shaders: ${["off (plain Minecraft)", "sun", "sun and shadows"][shaderLevel]}` +
-      `\nMusic: ${!sound.music ? "off" : sound.own ? sound.ownName : "place2mc piano"} (M)`;
+      `\nMusic: ${sound.spotify ? "Spotify (Esc to pause or change it)" : !sound.music ? "off (M)" : sound.own ? sound.ownName + " (M)" : "place2mc piano (M)"}`;
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

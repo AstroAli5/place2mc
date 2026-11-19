@@ -258,6 +258,86 @@
 "states": {},
 "version": 18168865
 },
+"minecraft:birch_sign[rotation=0]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=10]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+10
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=12]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+12
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=14]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+14
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=2]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=4]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+4
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=6]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+6
+]
+},
+"version": 18168865
+},
+"minecraft:birch_sign[rotation=8]": {
+"name": "minecraft:birch_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+8
+]
+},
+"version": 18168865
+},
 "minecraft:black_concrete[]": {
 "name": "minecraft:black_concrete",
 "states": {},
@@ -760,9 +840,99 @@
 "states": {},
 "version": 18168865
 },
+"minecraft:composter[level=0]": {
+"name": "minecraft:composter",
+"states": {
+"composter_fill_level": [
+"int",
+0
+]
+},
+"version": 18168865
+},
 "minecraft:cornflower[]": {
 "name": "minecraft:cornflower",
 "states": {},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=0]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+0
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=10]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+10
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=12]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+12
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=14]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+14
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=2]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+2
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=4]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+4
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=6]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+6
+]
+},
+"version": 18168865
+},
+"minecraft:crimson_sign[rotation=8]": {
+"name": "minecraft:crimson_standing_sign",
+"states": {
+"ground_sign_direction": [
+"int",
+8
+]
+},
 "version": 18168865
 },
 "minecraft:dandelion[]": {
@@ -1870,6 +2040,32 @@
 ],
 "weirdo_direction": [
 "int",
+1
+]
+},
+"version": 18168865
+},
+"minecraft:red_nether_brick_wall[east=none,north=none,south=none,up=true,west=none]": {
+"name": "minecraft:red_nether_brick_wall",
+"states": {
+"wall_connection_type_east": [
+"string",
+"none"
+],
+"wall_connection_type_north": [
+"string",
+"none"
+],
+"wall_connection_type_south": [
+"string",
+"none"
+],
+"wall_connection_type_west": [
+"string",
+"none"
+],
+"wall_post_bit": [
+"byte",
 1
 ]
 },

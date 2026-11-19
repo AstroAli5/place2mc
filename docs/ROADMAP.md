@@ -86,6 +86,14 @@ above the snow line (2.9). Street names were picked first because they make a pl
 ground. Traffic signs, house numbers and street furniture need map points that place2mc does not download
 yet (stop signs, hydrants, addresses), so they come next.
 
+## Researched for v1.6
+
+OpenStreetMap maps stop signs as a point on the road that must stop, at the stopping point, with an optional
+direction=forward/backward for the traffic it applies to; hydrants, lamps and bins are mapped as points where
+they stand. place2mc did not download any of these points before. Spotify's embed player plays whole songs only
+for someone logged in to Spotify in the same browser, otherwise 30-second previews (and often only previews on
+phones); the Web Playback SDK would need a Spotify developer app and Premium, so the walk-through uses the embed.
+
 ## What comes next
 
 - [ ] Real tree heights and positions from Meta/WRI's canopy height maps
@@ -105,3 +113,7 @@ yet (stop signs, hydrants, addresses), so they come next.
   (the Bedrock fields follow PocketMine-MP's sign code)
 - [x] "Now" in the walk-through: the sun where it really is over the place this minute (longitude and the
   equation of time) (v1.5)
+- [x] Road signs and street furniture from the map (v1.6): highway=stop and give_way (on the approach road, facing
+  the traffic the direction tag or the nearer junction says, on the kerb side for left- or right-hand traffic),
+  highway=bus_stop (name, shelter=yes), emergency=fire_hydrant, amenity=waste_basket, highway=street_lamp
+- [x] Spotify in the walk-through: paste a link, Spotify's embed player plays it (v1.6)

@@ -61,7 +61,7 @@ for path in sorted((world / "region").glob("r.*.mca")):
             assert str(be["id"]) == "minecraft:sign", be
             x, y, z = int(be["x"]), int(be["y"]), int(be["z"])
             assert x >> 4 == cx and z >> 4 == cz, "block entity in the wrong chunk"
-            sign_text[(x, y, z)] = [json.loads(str(be[f"Text{i}"]))["text"] for i in range(1, 5)]
+            sign_text[(x, y, z)] = ([json.loads(str(be[f"Text{i}"]))["text"] for i in range(1, 5)], str(be["Color"]))
         want_biomes = biomes[(cz + size // 32) * 4:(cz + size // 32) * 4 + 4, (cx + size // 32) * 4:(cx + size // 32) * 4 + 4]
         for sec in root["sections"]:
             pal = sec["block_states"]["palette"]
@@ -89,9 +89,9 @@ for path in sorted((world / "region").glob("r.*.mca")):
         n_chunks += 1
 print("nbtlib: parsed", n_chunks, "chunks, expected", (size // 16) ** 2, "| biomes match in every section")
 # every sign block has its text, at the same place, and nothing else has any
-want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): lines for y, z, x, r, lines in p.build_volume.signs}
+want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): (lines, colour) for y, z, x, r, lines, colour in p.build_volume.signs}
 assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_text))
-sign_blocks = int(np.isin(vol, p.SIGNS).sum())
+sign_blocks = int(np.isin(vol, p.SIGNS + p.STOP_SIGNS + p.GIVE_WAY_SIGNS).sum())
 assert sign_blocks == len(want_text), ("sign blocks without text", sign_blocks, len(want_text))
 print(f"signs: {len(sign_text)} with their text in the chunks, e.g. {next(iter(sign_text.values()), None)}")
 assert n_chunks == (size // 16) ** 2

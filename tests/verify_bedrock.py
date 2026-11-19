@@ -136,10 +136,10 @@ for k, v in db.items():
             x, y, z = int(e["x"]), int(e["y"]), int(e["z"])
             assert x >> 4 == cx and z >> 4 == cz, "sign in the wrong chunk's record"
             assert str(e["FrontText"]["Text"]) == str(e["BackText"]["Text"])
-            assert int(e["FrontText"]["SignTextColor"]) == -1
-            sign_text[(x, y, z)] = str(e["FrontText"]["Text"])
-want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): "\n".join(lines).rstrip("\n")
-             for y, z, x, r, lines in p.build_volume.signs}
+            assert int(e["FrontText"]["SignTextColor"]) == int(e["BackText"]["SignTextColor"])
+            sign_text[(x, y, z)] = (str(e["FrontText"]["Text"]), int(e["FrontText"]["SignTextColor"]) & 0xFFFFFFFF)
+want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): ("\n".join(lines).rstrip("\n"), bedrock.SIGN_COLOURS[colour])
+             for y, z, x, r, lines, colour in p.build_volume.signs}
 assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_text))
 print(f"signs: {len(sign_text)} with their text in block-entity records, e.g. {next(iter(sign_text.values()), '')!r}")
 assert tags[44] == tags[54] == tags[43] == expected_chunks
