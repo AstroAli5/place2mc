@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-VERSION = "1.6"
+VERSION = "1.7"
 USER_AGENT = f"place2mc/{VERSION} (hobby project)"
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",

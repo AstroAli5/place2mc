@@ -66,6 +66,7 @@ python tests/check_blocks.py mcdata 1.18 1.21.4                     # names, sta
 python tests/check_details.py out.png                               # fences, walls, rails, zebras, benches
 python tests/check_sun.py                                           # sun position, shadows in the pictures
 python tests/walk_sound.py "OUT/<name>/Walk around <name>.html"     # footsteps, music, birds; no page errors
+python tests/walk_physics.py                                        # the walk-through moves like the game
 python tests/fake_tiles.py TILES LAT,LON 608                        # test hills without internet
 python place2mc.py --osm-file MAP --center LAT,LON --radius 300 --saves OUT --tile-cache TILES --edition both
 python tests/verify_world.py MAP LAT,LON 300 "OUT/<name>" TILES     # Java, read back with 2 libraries
@@ -87,6 +88,23 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - New worlds are void around the build, so water on the edge is walled in with invisible barrier blocks.
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
+
+## State (v1.7)
+
+v1.7: Ali: "reverse engineer whole Minecraft" + github.com/Graphify-Labs/graphify. Read as: learn how the game behaves
+from public sources and re-create it in our own code; never decompile or copy Mojang code or assets (the repo is
+public; the workspace cannot reach Mojang's downloads, Maven or the wiki anyway). walk.html movement is now the
+game's tick physics (TICK = 1/20, tick(): keys x0.98, push 0.1 ground / x1.3 sprint, 0.02 air, 0.05 fly / x2,
+friction 0.546 ground, 0.91 air/fly, 0.8 water; vy = (vy - 0.08) * 0.98, jump 0.42 + sprint push 0.2, jumpDelay 10,
+fly vy += +-0.15 then x0.6; sneak Shift x0.3, eye 1.27); velocities are blocks per tick; drawing interpolates
+between ticks (before{}); view bobbing (V), FOV x1.15 sprinting, x1.1 flying. tests/walk_physics.py measures
+walk/sprint/sneak/fly/sprint-fly/sprint-jump/jump height/jump ticks on a flat world: all match the wiki.
+Creative mode: World.set + edits (applied when a chunk is decoded again), aimed() (DDA, reach 5), outline (line
+shader), left break / right place / middle pick, hotbar of 9 blocks (1-9, wheel), touch buttons, rebuild() of the
+chunk at once and its 8 neighbours via `stale`; kept in localStorage as block name+props, "Undo my building".
+Speed keys moved from 1-4 to - and = (1-9 are the hotbar, as in the game). Map credit moved to the top right.
+graphify (pip install graphifyy; `graphify update DIR`, tree-sitter, no LLM for code) made docs/code-map.md; on
+Arnis's src it finds 23,104 nodes / 63,765 edges (useful to find how Arnis does something).
 
 ## State (v1.6)
 

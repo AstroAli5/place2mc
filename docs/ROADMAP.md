@@ -94,6 +94,17 @@ they stand. place2mc did not download any of these points before. Spotify's embe
 for someone logged in to Spotify in the same browser, otherwise 30-second previews (and often only previews on
 phones); the Web Playback SDK would need a Spotify developer app and Premium, so the walk-through uses the embed.
 
+## Researched for v1.7: how the game moves
+
+"Reverse engineering Minecraft" here means learning how the game behaves from public sources and writing our own
+code that does the same; nothing of Mojang's is copied or downloaded. The Minecraft Wiki and the projects that
+re-create the game's physics agree: every tick (1/20 s) the player gets a push from the keys (which count 0.98),
+0.1 on the ground (x1.3 sprinting), 0.02 in the air, 0.05 flying (x2 sprinting); after moving, speed keeps 0.546
+of itself on the ground (block friction 0.6 x 0.91) and 0.91 in the air; the upward speed loses 0.08 and keeps
+0.98; a jump starts at 0.42 (a sprint jump also pushes 0.2 forward); flying has no gravity and keeps 0.6 of its
+up-down speed. The player is 0.6 x 1.8 blocks with the eyes at 1.62. Those rules give the wiki's speeds, and
+tests/walk_physics.py checks eight of them. The code map in docs/code-map.md was made with graphify.
+
 ## What comes next
 
 - [ ] Real tree heights and positions from Meta/WRI's canopy height maps
@@ -117,3 +128,5 @@ phones); the Web Playback SDK would need a Spotify developer app and Premium, so
   the traffic the direction tag or the nearer junction says, on the kerb side for left- or right-hand traffic),
   highway=bus_stop (name, shelter=yes), emergency=fire_hydrant, amenity=waste_basket, highway=street_lamp
 - [x] Spotify in the walk-through: paste a link, Spotify's embed player plays it (v1.6)
+- [x] The game's movement in the walk-through, tick by tick, measured by tests/walk_physics.py (v1.7)
+- [x] Creative mode in the walk-through: break, place, pick, hotbar, kept in the browser (v1.7)

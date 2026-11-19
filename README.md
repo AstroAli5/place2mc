@@ -28,8 +28,21 @@
 ## Walk around it
 
 Every conversion also makes a page you open in any browser, on a computer or a phone. Walk with W A S D and the
-mouse, jump, sprint, fly (F), go 2, 4 or 8 times faster (1-4), change the time of day (T, including "now": the
-real sun over the place this minute) and switch the shaders (G).
+mouse, jump, sprint (Ctrl), sneak (Shift), fly (F), go 2, 4 or 8 times faster (- and =), change the time of day (T,
+including "now": the real sun over the place this minute) and switch the shaders (G).
+
+### Moves like the game, builds like creative mode
+
+The walk-through runs the game's movement rules, 20 ticks a second: the same push, friction, gravity and jump. A test
+measures it against the numbers on the Minecraft Wiki: walking 4.317 blocks a second, sprinting 5.612, sneaking
+1.295, flying 10.89, sprint-flying 21.78, sprint-jumping 7.13 on average, a jump 1.2522 blocks high that lands after
+12 ticks. All eight match. The camera bobs as you walk (V turns it off) and widens a little when you sprint or fly.
+
+And you can build: left click breaks the block you aim at (the outline shows it, up to 5 blocks away), right click
+places the block from the hotbar, middle click picks a block, 1 to 9 or the mouse wheel choose one. What you build
+stays in your browser for that world; "Undo my building" on the pause screen takes it all away.
+
+<p align="center"><img src="docs/creative-ala.jpg" width="760" alt="A little brick hut built in the walk-through at ALA, with the hotbar"></p>
 
 <p align="center"><img src="docs/flyover.gif" width="640" alt="Flying round the ALA campus in the browser walk-through"></p>
 
