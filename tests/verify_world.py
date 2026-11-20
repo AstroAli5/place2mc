@@ -44,6 +44,7 @@ print("expected volume", vol.shape, "non-air blocks", int((vol != p.AIR).sum()))
 # 1. every chunk parses with nbtlib and has the expected structure
 n_chunks = 0
 single = {}     # (cx, cz, section y) -> the one block that fills a section stored without a data array
+bed_entities = set()
 sign_text = {}  # (x, y, z) world -> the four lines, from the block entities
 for path in sorted((world / "region").glob("r.*.mca")):
     raw = path.read_bytes()
@@ -62,9 +63,12 @@ for path in sorted((world / "region").glob("r.*.mca")):
         assert int(root["xPos"]) == rx * 32 + i % 32 and int(root["zPos"]) == rz * 32 + i // 32, "chunk in wrong slot"
         cx, cz = int(root["xPos"]), int(root["zPos"])
         for be in root["block_entities"]:
-            assert str(be["id"]) == "minecraft:sign", be
             x, y, z = int(be["x"]), int(be["y"]), int(be["z"])
             assert x >> 4 == cx and z >> 4 == cz, "block entity in the wrong chunk"
+            if str(be["id"]) == "minecraft:bed":                  # a bed half: checked against the beds below
+                bed_entities.add((x, y, z))
+                continue
+            assert str(be["id"]) == "minecraft:sign", be
             sign_text[(x, y, z)] = ([json.loads(str(be[f"Text{i}"]))["text"] for i in range(1, 5)], str(be["Color"]))
         want_biomes = biomes[(cz + size // 32) * 4:(cz + size // 32) * 4 + 4, (cx + size // 32) * 4:(cx + size // 32) * 4 + 4]
         for sec in root["sections"]:
@@ -98,6 +102,9 @@ assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_te
 sign_blocks = int(np.isin(vol, p.SIGNS + p.STOP_SIGNS + p.GIVE_WAY_SIGNS).sum())
 assert sign_blocks == len(want_text), ("sign blocks without text", sign_blocks, len(want_text))
 print(f"signs: {len(sign_text)} with their text in the chunks, e.g. {next(iter(sign_text.values()), None)}")
+beds = {(int(x) - size // 2, int(y) + p.Y_MIN, int(z) - size // 2) for y, z, x in zip(*np.nonzero(np.isin(vol, p.BED_BLOCKS)))}
+assert bed_entities == beds, ("bed entities differ from the bed blocks", len(bed_entities), len(beds))
+print(f"beds: {len(beds)} bed halves, each with its block entity")
 assert n_chunks == (size // 16) ** 2
 
 # 2. blocks read back with anvil-parser2 match what the converter meant to place

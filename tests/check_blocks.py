@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import place2mc as p
 import mcrender
+import walkdata
 
 root = Path(sys.argv[1])
 problems = 0
@@ -30,6 +31,17 @@ def sides_reached(boxes):
         out |= {side for side, hit in (("north", z0 <= 0), ("south", z1 >= 1), ("west", x0 <= 0), ("east", x1 >= 1),
                                        ("middle", x0 <= .5 <= x1 and z0 <= .5 <= z1)) if hit}
     return sorted(out)
+
+
+def voxels(boxes):
+    """The sixteenths of a block a list of boxes fills."""
+    out = set()
+    for x0, y0, z0, x1, y1, z1 in boxes:
+        for i in range(round(x0 * 16), round(x1 * 16)):
+            for j in range(round(y0 * 16), round(y1 * 16)):
+                for k in range(round(z0 * 16), round(z1 * 16)):
+                    out.add((i, j, k))
+    return out
 
 
 for version in sys.argv[2:]:
@@ -99,8 +111,25 @@ for version in sys.argv[2:]:
                 # drawn as two crossed pictures; in the game these plants have no collision box at all
                 if game:
                     bad.append(f"{name}: drawn as a walk-through plant but the game gives it a collision box {game}")
-            elif game != ours:
+            elif game != ours and voxels(game) != voxels(ours):     # the same shape cut into other boxes is fine
                 bad.append(f"{name} {props}: render shape {ours} but game shape {game}")
+    # the walk-through's open doors (walkdata.DOOR_OPEN) against the game's shape for every facing and hinge
+    if shapes is not None and "dark_oak_door" in blocks:
+        info = blocks["dark_oak_door"]
+        order = [s["name"] for s in info["states"]]
+        values = {s["name"]: ([str(v) for v in s["values"]] if s["type"] == "enum" else ["true", "false"])
+                  for s in info["states"]}
+        for (facing, hinge), (lo, hi) in walkdata.DOOR_OPEN.items():
+            full = {"facing": facing, "half": "lower", "hinge": hinge, "open": "true", "powered": "false"}
+            index = 0
+            for k in order:
+                index = index * len(values[k]) + values[k].index(full[k])
+            entry = shapes["blocks"]["dark_oak_door"]
+            game = [tuple(round(c, 4) for c in box) for box in shapes["shapes"][str(entry[index])]]
+            ours = [tuple(round(float(c), 4) for c in (*lo, *hi))]
+            shape_checks += 1
+            if game != ours:
+                bad.append(f"open door {facing}/{hinge}: walk-through shape {ours} but game shape {game}")
     problems += len(bad)
     print(f"Minecraft {version}: {len(p.BLOCKS)} block states checked, {shape_checks} shapes compared, "
           f"{'all OK' if not bad else str(len(bad)) + ' problems'}"

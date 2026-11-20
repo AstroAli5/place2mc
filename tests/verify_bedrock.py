@@ -130,21 +130,29 @@ tags = Counter(k[8] for k in db if len(k) == 9)
 print("per-chunk records:", dict(tags), "for", expected_chunks, "chunks")
 # the signs' text: block-entity records (49), one little-endian NBT compound after another
 sign_text = {}
+bed_entities = set()
 for k, v in db.items():
     if len(k) == 9 and k[8] == 49:
         cx, cz = struct.unpack("<ii", k[:8])
         buf = io.BytesIO(v)
         while buf.tell() < len(v):
             e = nbtlib.File.parse(buf, byteorder="little")
-            assert str(e["id"]) == "Sign" and int(e["isMovable"]) == 1, e
             x, y, z = int(e["x"]), int(e["y"]), int(e["z"])
-            assert x >> 4 == cx and z >> 4 == cz, "sign in the wrong chunk's record"
+            assert x >> 4 == cx and z >> 4 == cz, "block entity in the wrong chunk's record"
+            if str(e["id"]) == "Bed":                             # a bed half: its colour, red
+                assert int(e["color"]) == 14 and int(e["isMovable"]) == 1, e
+                bed_entities.add((x, y, z))
+                continue
+            assert str(e["id"]) == "Sign" and int(e["isMovable"]) == 1, e
             assert str(e["FrontText"]["Text"]) == str(e["BackText"]["Text"])
             assert int(e["FrontText"]["SignTextColor"]) == int(e["BackText"]["SignTextColor"])
             sign_text[(x, y, z)] = (str(e["FrontText"]["Text"]), int(e["FrontText"]["SignTextColor"]) & 0xFFFFFFFF)
 want_text = {(x - size // 2, y + p.Y_MIN, z - size // 2): ("\n".join(lines).rstrip("\n"), bedrock.SIGN_COLOURS[colour])
              for y, z, x, r, lines, colour in p.build_volume.signs}
 assert sign_text == want_text, ("sign texts differ", len(sign_text), len(want_text))
+beds = {(int(x) - size // 2, int(y) + p.Y_MIN, int(z) - size // 2) for y, z, x in zip(*np.nonzero(np.isin(vol, p.BED_BLOCKS)))}
+assert bed_entities == beds, ("bed entities differ from the bed blocks", len(bed_entities), len(beds))
+print(f"beds: {len(beds)} bed halves, each with its Bed block entity (red)")
 print(f"signs: {len(sign_text)} with their text in block-entity records, e.g. {next(iter(sign_text.values()), '')!r}")
 assert tags[44] == tags[54] == tags[43] == expected_chunks
 assert all(v == bytes([bedrock.CHUNK_VERSION]) for k, v in db.items() if len(k) == 9 and k[8] == 44)

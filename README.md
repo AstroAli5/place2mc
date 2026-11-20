@@ -77,6 +77,7 @@ Every conversion also makes a page you open in any browser, on a computer or a p
 | Ctrl or W W | sprint | fly | fly on / off |
 | Shift | sneak (flying: go down) | ×1 | speed ×1, ×2, ×4, ×8 |
 | F | fly on / off | ⛏ / ▣ | break / place the block in the middle |
+| Right click a door | open / shut it (Shift: place a block on it) | ▣ on a door | open / shut it |
 | Left / right / middle click | break / place / pick a block | ♪ | music on / off |
 | 1 … 9, mouse wheel | choose a block in the hotbar | | |
 | - and = | speed: normal, ×2, ×4, ×8 | | |
@@ -300,6 +301,7 @@ or download `Walk around ALA.html` and open it. Its tag file shows how to make a
 
 | Version | |
 |---|---|
+| **1.9** | Real floor plans for every building: rooms with doors off corridors, staircases to every floor (also inside steep roofs), lamps, real beds; doors open in the walk-through (right-click); pitch lines, goals, nets, hoops, stands, statues, bike racks and more from the map; autumn leaves for the game worlds (a Java resource pack, a Bedrock world pack) |
 | **1.8** | Real heights from laser scans in the US: every roof, tower and tree as measured; insides built for what each building is (library, chapel, pool, gym, dorm, theatre, dining hall, museum, lab, classroom); name signs at every named building and "where am I" in the walk-through; autumn leaves by date; Franklin & Marshall College as the example |
 | **1.7** | The walk-through moves exactly like the game (8 measurements, all match); creative mode to break and place blocks, with a hotbar, kept in your browser; a map of the code made with [graphify](https://github.com/Graphify-Labs/graphify) |
 | **1.6** | Spotify in the walk-through; stop and give-way signs on the right side of the road for each country, bus stops with shelters, fire hydrants, bins, street lamps where the real ones are |

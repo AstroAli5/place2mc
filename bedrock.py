@@ -285,6 +285,12 @@ def sign_entity(x, y, z, lines, colour="white"):
                         ("IsWaxed", "byte", 1)])
 
 
+def bed_entity(x, y, z, colour=14):
+    """A bed's block entity as Bedrock saves it: its colour (14 = red) lives here, not in the block."""
+    return le_compound([("id", "string", "Bed"), ("x", "int", x), ("y", "int", y), ("z", "int", z),
+                        ("isMovable", "byte", 1), ("color", "byte", colour)])
+
+
 def chunk_records(vol, biomes, palette_bytes, signs=()):
     """signs: (layer, z, x, rotation, lines, colour) of every sign block; their text goes in each chunk's block-entity
     record (key type 49), one little-endian NBT compound after another."""
@@ -295,6 +301,9 @@ def chunk_records(vol, biomes, palette_bytes, signs=()):
     for y, z, x, _, lines, colour in signs:
         by_chunk.setdefault((x // 16, z // 16), []).append(
             sign_entity(x - size // 2, y + p.Y_MIN, z - size // 2, lines, colour))
+    for y, z, x in zip(*np.nonzero(np.isin(vol, p.BED_BLOCKS))):    # every bed half: its colour
+        by_chunk.setdefault((int(x) // 16, int(z) // 16), []).append(
+            bed_entity(int(x) - size // 2, int(y) + p.Y_MIN, int(z) - size // 2))
     for cz_i in range(size // 16):
         for cx_i in range(size // 16):
             cx, cz = cx_i - offset, cz_i - offset
@@ -364,7 +373,7 @@ def level_dat(name, spawn):
     return struct.pack("<ii", 10, len(body)) + body
 
 
-def export_mcworld(vol, biomes, out_path, name, spawn, icon=None, signs=()):
+def export_mcworld(vol, biomes, out_path, name, spawn, icon=None, signs=(), autumn=False):
     """Write a .mcworld file (a zip of the world folder) for Minecraft Bedrock 1.21.120 and newer."""
     out_path = Path(out_path)
     entries = load_table()
@@ -378,6 +387,9 @@ def export_mcworld(vol, biomes, out_path, name, spawn, icon=None, signs=()):
     (stage / "levelname.txt").write_text(name, encoding="utf-8")
     if icon is not None:
         icon.convert("RGB").resize((256, 144)).save(stage / "world_icon.jpeg", quality=88)
+    if autumn:                                          # autumn leaves: a resource pack of the world's own
+        import autumn as autumn_pack
+        autumn_pack.bedrock_pack(stage, name)
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as z:
         for path in sorted(stage.rglob("*")):
             if path.is_file():

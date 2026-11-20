@@ -31,7 +31,7 @@ BUILDINGS = [  # name, tags, the use it should get, a block that must be inside
     ("Town Library", {"building": "yes"}, "library", "bookshelf"),
     ("Kunkel Aquatic Center", {"building": "yes"}, "pool", "water"),
     ("Santee Chapel", {"building": "yes"}, "chapel", "dark_oak_stairs"),
-    ("Ware College House", {"building": "yes"}, "dorm", "red_concrete"),
+    ("Ware College House", {"building": "yes"}, "dorm", "red_bed"),
     ("Mayser Physical Education Center", {"building": "yes"}, "gym", "birch_planks"),
     ("Roschel Performing Arts Center", {"building": "yes"}, "theatre", "red_nether_brick_stairs"),
     ("Market Place Dining Hall", {"building": "yes"}, "dining", "polished_andesite"),
@@ -70,6 +70,11 @@ def main():
         check(lnames[layers[0, z, x]] == name, f"the walk-through says Inside {lnames[layers[0, z, x]]!r} at {name}")
     street = lnames[layers[1, 56, 64]]
     check(street == "College Avenue", f"on the street it says On {street!r}")
+    if len(sys.argv) > 1:                       # a walk-through of this block, for tests/walk_doors.py
+        import walkdata
+        spawn = p.choose_spawn(vol, ground, p.build_volume.surface, (64, 112))
+        walkdata.export(vol, sys.argv[1], spawn, "Inside test", labels=labels, signs=p.build_volume.signs)
+        print("walk-through:", sys.argv[1])
     print("check_inside: " + ("all OK" if not fails else f"{len(fails)} FAILED"))
     sys.exit(1 if fails else 0)
 

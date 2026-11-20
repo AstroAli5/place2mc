@@ -67,6 +67,10 @@ python tests/check_details.py out.png                               # fences, wa
 python tests/check_sun.py                                           # sun position, shadows in the pictures
 python tests/walk_sound.py "OUT/<name>/Walk around <name>.html"     # footsteps, music, birds; no page errors
 python tests/walk_physics.py                                        # the walk-through moves like the game
+python tests/walk_doors.py "OUT/<name>/Walk around <name>.html"     # doors open and shut, both halves
+python tests/check_rooms.py                                         # rooms, doors, beds, stairs: every floor reachable
+python tests/check_inside.py                                        # insides by use, name signs, place labels
+python tests/check_autumn.py                                        # autumn packs for Java and Bedrock
 python tests/fake_tiles.py TILES LAT,LON 608                        # test hills without internet
 python place2mc.py --osm-file MAP --center LAT,LON --radius 300 --saves OUT --tile-cache TILES --edition both
 python tests/verify_world.py MAP LAT,LON 300 "OUT/<name>" TILES     # Java, read back with 2 libraries
@@ -88,6 +92,42 @@ the library Arnis uses) was built in the first session; rebuild it if needed. Th
 - New worlds are void around the build, so water on the edge is walled in with invisible barrier blocks.
 - Keep `--osm-file` and `--flat` working, so everything can be tested offline.
 - Never say "tested in Minecraft" unless Ali says he opened the world. Say what was checked and what was not.
+
+## State (v1.9)
+
+v1.9: Ali (on the "still not exact" list): "figure it out yourself + still needs a lot of work inside the buildings + the
+doors don't open, I have to break them + it still lacks a lot of details". Ali has no Minecraft on his PC (said so);
+computer use on his PC still reports off. Inside (plan_rooms, used for office/home/shop/dorm/classroom/lab):
+wall_frame gives every inside cell its distance d from the nearer outside wall (along x or z), the wall's direction
+and the building's width; rooms d <= depth (ROOM_PLANS: width along the wall incl. partition, max depth: dorm 5/4 =
+F&M doubles ~4x4 m, office 4/4, home 4/3, classroom and lab 8/6), a wall at d = depth+1 with a spruce door per room
+(a == n//2), corridor, an inner ring (e = d - depth - 4) of studies/kitchens/bathrooms/meeting rooms in deep
+buildings, a lobby from each front door, furniture per room kind (dorm: 2 red_bed, nightstands, desks, chairs,
+wardrobe; ground floor lounge + laundry near the doors, one lounge per upper floor; office, home, classroom with
+board, lab, shop floor), CEILING_LAMP per room and every 6 along corridors; join_pockets opens a door or removes
+furniture for any floor bit not reachable (keeps stairs, beds, glass: KEEP_IN_PLACE). add_stairs: switch-back
+stairwell 2 lanes x (st+3), along a straight outside wall (d 1/2) or free-standing (free_stairwell, for walls at an
+angle), in the part with most floors (score -1000 * floors), flights alternate lanes, last step in the next floor's
+layer, 2 cells of head room cut over the others, stair hall cleared in front, then join_pockets per floor from the
+landings; add_stairs.missed says why a building has none. Measured roofs: floors also inside tall roofs above the
+eaves (head room >= 3), inside_h = max(height, mtop - floor0) for rooms/stairs, everything capped by each cell's roof.
+Hanging lamps with air above are removed; fix_beds removes half beds. Beds: BEDS (red_bed, 8 states), block entities
+written for every bed half in Java (minecraft:bed) and Bedrock (Bed, color 14); verify_world/verify_bedrock check
+them. 241 block states (beds, gray/red carpet). walk.html: doors open/shut (walkdata DOOR_OPEN twins after the real
+blocks, chunk data now Uint16, world.tex/world.twin; right click or the place button, Shift places; door sound; hint
+"Right-click to open the door"); lamps light rooms by day too (mix(1, 0.25, uDay * open)). Outside (place_extras):
+pitch_frame (tightest box from the outline's edges) + sport_lines (soccer circle/boxes/goals, American football yard
+lines/goalposts, tennis/pickleball service lines + nets of fences, basketball keys/hoops), stands rising from the
+nearest pitch, statues (plinth + figure + name/artist sign), bike racks, outdoor tables, post boxes, flagpole, power
+masts; Overpass query and parse_osm_xml keep these nodes. Autumn (autumn.py): Java resource pack zip next to the world
+(untinted cube_all models + autumn textures made from Pixel Perfection CE, spruce stays green; pack_format 46 with
+supported_formats/min_format/max_format to 999; NOT bundled as resources.zip, since an incompatible bundled pack makes
+Java refuse the world, MC-260577), Bedrock world pack (manifest, world_resource_packs.json, client biomes plains/forest/
+river with minecraft:foliage_appearance #C0702E, format 1.21.120 as in Mojang's bedrock-samples); --season
+today|autumn|summer. Tests: tests/check_rooms.py (walk in from the front door: every floor, >90% of the floor),
+tests/walk_doors.py, tests/check_autumn.py; check_blocks compares open-door shapes and (by voxels) bed/carpet shapes.
+F&M: 684 staircases, 1348 outside doors, 4982 bed halves, 24 goals/nets/hoops, 2 stands, 4 statues, 21 bike racks.
+Not checked: the real game (either edition), the autumn packs in the game.
 
 ## State (v1.8)
 

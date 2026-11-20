@@ -13,7 +13,7 @@
   #cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
   #cross::after { top: 8px; left: 0; width: 18px; height: 2px; }
   #place { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); color: #fff; font: 600 18px/1.3 system-ui,
-           sans-serif; text-shadow: 0 1px 3px #000c; pointer-events: none; white-space: nowrap; max-width: 90vw;
+           sans-serif; text-shadow: 0 1px 3px #000c; pointer-events: none; white-space: pre; text-align: center; max-width: 90vw;
            overflow: hidden; text-overflow: ellipsis; }
   #place:empty { display: none; }
   #hud { position: fixed; left: 8px; top: 6px; color: #fff; text-shadow: 1px 1px 0 #3f3f3f; font: 13px/1.5 monospace;
@@ -75,6 +75,7 @@
     <tr><td>Space</td><td>jump</td></tr>
     <tr><td>Shift</td><td>sneak</td></tr>
     <tr><td>F or Space Space</td><td>fly on / off (Space up, Shift down)</td></tr>
+    <tr><td>Right click a door</td><td>open or shut it</td></tr>
     <tr><td>Left / right click</td><td>break a block / place one (creative mode); middle click: pick it</td></tr>
     <tr><td>1 … 9, wheel</td><td>choose a block in the hotbar</td></tr>
     <tr><td>- and =</td><td>speed: normal, ×2, ×4, ×8</td></tr>
@@ -135,6 +136,9 @@ class World {
     this.wet = new Uint8Array(N);                // full of water: water itself, and seagrass and kelp
     B.forEach((b, i) => { this.wet[i] = b.name === "water" || b.wet ? 1 : 0; });
     this.boxes = B.map(b => b.boxes); this.collide = B.map(b => b.collide);
+    // doors: every closed door has an open twin after the real blocks (and back); twins use the door's textures
+    this.twin = Int16Array.from(B.map(b => b.twin ?? -1));
+    this.tex = Uint16Array.from(B.map((b, i) => b.tex ?? i));
     this.signRot = B.map(b => (b.sign ?? -1));   // standing signs: 0-15, turned like the game's (0 faces south)
     this.water = B.findIndex(b => b.name === "water");
     this.edits = new Map();                      // what you build: chunk key -> Map(index in the chunk -> block)
@@ -145,7 +149,7 @@ class World {
     let d = this.cache.get(key);
     if (d) return d;
     const H = this.H, runs = this.runs;
-    d = new Uint8Array(256 * H);
+    d = new Uint16Array(256 * H);                 // block numbers: more than 256 with the open doors
     for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
       const x = cx * 16 + lx, z = cz * 16 + lz;
       if (x < 0 || z < 0 || x >= this.X || z >= this.Z) continue;
@@ -207,7 +211,7 @@ function faceUV(f, x, y, z) {                   // texture position of a point o
 
 function buildChunk(world, cx, cz) {
   const H = world.H, X0 = cx * 16 - 16, Z0 = cz * 16 - 16;
-  const blk = new Uint8Array(W * W * H), L = new Uint8Array(W * W * H);
+  const blk = new Uint16Array(W * W * H), L = new Uint8Array(W * W * H), T = world.tex;
   const at = (x, y, z) => (y * W + z) * W + x;
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     const ccx = cx + dx, ccz = cz + dz;
@@ -308,7 +312,7 @@ function buildChunk(world, cx, cz) {
         if (solidCube[nb]) continue;
         if (a > 0 && (nb === b || (b === water && wet[nb]))) continue;
         if (b === water && f === 0 && height === 1) continue;
-        const layer = 2 * b + (f < 2 ? 0 : 1);
+        const layer = 2 * T[b] + (f < 2 ? 0 : 1);
         const pts = [], uvs = [], bright = [], aos = [], ext = [];
         const shade = SH[FACES[f].shade];
         for (const c of FACES[f].c) {
@@ -344,7 +348,7 @@ function buildChunk(world, cx, cz) {
           const px = cc[0] ? hi[0] : lo[0], py = cc[1] ? hi[1] : lo[1], pz = cc[2] ? hi[2] : lo[2];
           pts.push(P(px, py, pz)); uvs.push(faceUV(f, px, py, pz)); bright.push(own * SH[FACES[f].shade]);
         }
-        quad(out, pts, uvs, 2 * b + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8);
+        quad(out, pts, uvs, 2 * T[b] + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8);
       }
     } else if (boxes[b].length) {
       const own = glow[b] ? 1 : LM[lightAt(x, y, z)];
@@ -362,11 +366,11 @@ function buildChunk(world, cx, cz) {
             uvs.push(faceUV(f, px, py, pz));
             bright.push(own * SH[FACES[f].shade]);
           }
-          quad(out, pts, uvs, 2 * b + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8 + kindOf(b));
+          quad(out, pts, uvs, 2 * T[b] + (f < 2 ? 0 : 1), bright, a, false, ext, f * 8 + kindOf(b));
         }
       }
     } else if (crossB[b]) {
-      const br = LM[lightAt(x, y, z)] * 0.9, layer = 2 * b + 1, e = 0.06;
+      const br = LM[lightAt(x, y, z)] * 0.9, layer = 2 * T[b] + 1, e = 0.06;
       const e1 = [lightAt(x, y, z) / 15, blAt(x, y, z) / 15, 0.9], ext = [e1, e1, e1, e1], nk = 6 * 8 + 3;
       for (const [x0, z0, x1, z1] of [[e, e, 1 - e, 1 - e], [e, 1 - e, 1 - e, e]]) {
         const pts = [[wx + x0, y, wz + z0], [wx + x1, y, wz + z1], [wx + x1, y + 1, wz + z1], [wx + x0, y + 1, wz + z0]];
@@ -459,7 +463,8 @@ void main() {
   if (uShadowOn > 0.5 && sun > 0.0) sun *= shadowAt();
   float skyLight = sky * sky;
   vec3 amb = uAmb * (0.25 + 0.75 * skyLight) * (0.78 + 0.22 * n.y) * ao;
-  vec3 lamp = vec3(1.0, 0.68, 0.38) * pow(vLight.y, 3.0) * 1.7 * mix(1.0, 0.25, uDay);   // lamps matter after dark
+  // lamps: indoors they light the room day and night (as the game's light level 15 does); outside they matter after dark
+  vec3 lamp = vec3(1.0, 0.72, 0.45) * pow(vLight.y, 2.4) * 1.5 * mix(1.0, 0.25, uDay * open);
   vec3 lit = albedo * (amb + uSunCol * sun + lamp + 0.015);
   if (vKind == 4) lit = albedo * 1.9;           // lanterns glow
   if (vKind == 1 && vFace == 0) {               // water: little waves, the sky mirrored in it, the sun glinting
@@ -1397,7 +1402,7 @@ async function main() {
     hotbar.forEach((b, k) => {
       const c = document.createElement("canvas");
       c.width = c.height = 16;
-      c.getContext("2d").drawImage(atlas, 0, (2 * b + 1) * 16, 16, 16, 0, 0, 16, 16);   // the block's side
+      c.getContext("2d").drawImage(atlas, 0, (2 * world.tex[b] + 1) * 16, 16, 16, 0, 0, 16, 16);   // the block's side
       if (k === slot) c.className = "on";
       c.title = world.info.blocks[b].name.replace(/_/g, " ");
       bar.appendChild(c);
@@ -1408,8 +1413,26 @@ async function main() {
     if (!t || t.y < 0) return;
     if (setBlock(t.x, t.y, t.z, 0)) footstep(materialOf(t.b), 1.5);
   }
+  // a door opens and shuts with a right click, both halves together, like the game (sneak to place a block on it)
+  function useDoor(t) {
+    const twin = world.twin, half = world.info.blocks[t.b].props.half;
+    const other = t.y + (half === "upper" ? -1 : 1), ob = world.get(t.x, other, t.z);
+    world.set(t.x, t.y, t.z, twin[t.b]); changed(t.x, t.y, t.z);
+    if (twin[ob] >= 0 && world.info.blocks[ob].name === world.info.blocks[t.b].name) {
+      world.set(t.x, other, t.z, twin[ob]); changed(t.x, other, t.z);
+    }
+    doorSound(world.info.blocks[twin[t.b]].props.open === "true");
+    sound.doors = (sound.doors || 0) + 1;
+  }
+  function doorSound(opening) {
+    if (!sound.ctx) return;
+    const t = sound.ctx.currentTime + 0.01;
+    burst(t, opening ? 0.22 : 0.09, 0.22, [["bandpass", opening ? 700 : 450, 3]], opening ? 0.8 : 1.1, 0);
+    thud(t + (opening ? 0.02 : 0.05), opening ? 160 : 120, opening ? 0.25 : 0.45, opening ? 0.12 : 0.09);
+  }
   function placeBlock() {
     const t = aimed(), b = hotbar[slot];
+    if (t && world.twin[t.b] >= 0 && !player.sneak) { useDoor(t); return; }
     if (!t || b === undefined) return;
     const x = t.x + t.face[0], y = t.y + t.face[1], z = t.z + t.face[2], here = world.get(x, y, z);
     if (here && here !== world.water && !world.cross[here]) return;   // only into air, water or plants
@@ -1422,8 +1445,9 @@ async function main() {
   function pickBlock() {
     const t = aimed();
     if (!t) return;
-    const k = hotbar.indexOf(t.b);
-    if (k >= 0) slot = k; else hotbar[slot] = t.b;
+    const pb = world.info.blocks[t.b].props?.open === "true" && world.twin[t.b] >= 0 ? world.twin[t.b] : t.b;
+    const k = hotbar.indexOf(pb);
+    if (k >= 0) slot = k; else hotbar[slot] = pb;
     drawHotbar();
   }
   $("undo").onclick = () => {
@@ -1717,7 +1741,9 @@ async function main() {
       placeTime = now;
       const here = whereAmI(p), seen = lookingAt(p);
       placeText = (here ? "\n\u25b8 " + here : "") + (seen && !here.includes(seen) ? "\nLooking at: " + seen : "");
-      $("place").textContent = here || "";
+      const door = aim && world.twin[aim.b] >= 0
+        ? (world.info.blocks[aim.b].props.open === "true" ? "shut" : "open") : "";
+      $("place").textContent = (here || "") + (door ? `\n${TOUCH ? "Tap \u25a3" : "Right-click"} to ${door} the door` : "");
     }
     $("hud").textContent = `${info.name}${placeText}\nXYZ: ${(p.x - Math.floor(world.X / 2)).toFixed(1)} / ${(p.y + info.yMin).toFixed(1)} / ${(p.z - Math.floor(world.Z / 2)).toFixed(1)}\n` +
       `Facing: ${facing}${p.fly ? "   (flying)" : p.sprint ? "   (sprinting)" : ""}${autoJump ? "" : "   auto-jump off"}` +

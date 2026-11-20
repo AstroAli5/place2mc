@@ -304,10 +304,21 @@ class TextureSource:
                 base += "_planks"
         elif name.endswith("_sign"):                     # drawn with the planks it is made of
             base = name[:-len("_sign")] + "_planks"
+        elif name.endswith("_carpet"):                   # the wool of its colour
+            base = name[:-len("_carpet")] + "_wool"
         if self.path == BUNDLED_TEXTURES:
             base = BUNDLED_STANDINS.get(base, base)
         backdrop = BACKDROP["leaves"] if "leaves" in name else BACKDROP["glass"] if name == "glass" else \
             BACKDROP["door"] if "_door/" in name else BACKDROP["rail"] if name == "rail" else BACKDROP["default"]
+        if "_bed/" in name:                              # the game draws beds from an entity texture: here a white
+            colour, part = name.split("/")              # pillow end and a blanket of the bed's colour, from wool
+            colour = colour[:-len("_bed")]
+            top = self.get(("white" if part == "head" else colour) + "_wool", backdrop)
+            side = self.get(colour + "_wool", backdrop)
+            if top is None or side is None:
+                self.missing.append(name)
+                return None
+            return top[0], side[0], top[1], side[1]
         if "_door/" in name or name.startswith(("tall_grass/", "tall_seagrass/")):
             kind, half = name.split("/")
             got = self.get(kind + ("_bottom" if half == "lower" else "_top"), backdrop)
@@ -448,6 +459,10 @@ def _make_textures(source=None):
     rail[:, 2:4] = rail[:, 12:14] = (150, 150, 152)
     by_name["rail"] = _clip(rail)
     by_name["smooth_stone_slab"] = by_name["smooth_stone"]
+    by_name["red_bed/head"] = (speckled((232, 232, 228), 4, "pillow"), speckled((160, 38, 34), 5, "blanket"))
+    by_name["red_bed/foot"] = speckled((160, 38, 34), 5, "blanket")
+    by_name["gray_carpet"] = speckled((62, 68, 72), 4, "gray carpet")
+    by_name["red_carpet"] = speckled((150, 46, 40), 5, "red carpet")
     by_name["polished_deepslate_slab"] = by_name["gray_concrete"]
     masks = {}
     for kind in ("oak", "birch", "spruce", "acacia", "jungle"):
@@ -462,6 +477,8 @@ def _make_textures(source=None):
         name = full_name.split(":")[1]
         if name.endswith("_door") or name in ("tall_grass", "tall_seagrass"):
             name += "/" + props["half"]
+        elif name.endswith("_bed"):
+            name += "/" + props["part"]
         entry = source.block(name) if source is not None and name not in ("air", "barrier") else None
         if entry is not None:
             top, side, solid[i, 0], solid[i, 1] = entry
@@ -520,6 +537,15 @@ def _shapes():
                     "east": ((8 / 16, 0, 5 / 16), (1, 14 / 16, 11 / 16))}
             boxes += [arms[side] for side in arms if (props or {}).get(side, "none") != "none"]
             boxes = boxes or [((4 / 16, 0, 4 / 16), (12 / 16, 1, 12 / 16))]
+        elif name.endswith("_carpet"):
+            boxes = [((0, 0, 0), (1, 1 / 16, 1))]
+        elif name.endswith("_bed"):                   # the mattress and two legs at its end, as the game's shape
+            f = props["facing"] if props["part"] == "head" else {"north": "south", "south": "north", "west": "east",
+                                                                   "east": "west"}[props["facing"]]
+            leg = 3 / 16
+            corners = {"north": [(0, 0), (1 - leg, 0)], "south": [(0, 1 - leg), (1 - leg, 1 - leg)],
+                       "west": [(0, 0), (0, 1 - leg)], "east": [(1 - leg, 0), (1 - leg, 1 - leg)]}[f]
+            boxes = [((0, leg, 0), (1, 9 / 16, 1))] + [((x, 0, z), (x + leg, leg, z + leg)) for x, z in corners]
         elif name == "rail":                          # drawn flat (sloped rails too), one pixel thick
             boxes = [((0, 0, 0), (1, 1 / 16, 1))]
         elif name.endswith("_slab") and props.get("type") == "bottom":
@@ -727,7 +753,8 @@ AO_LEVELS = np.array([0.50, 0.68, 0.84, 1.0], dtype=np.float32)
 # Slabs and stairs are lit in their own cell (light comes in from above and the sides) but, like the game,
 # their full bottom stops sky light going straight down.
 _LIGHT_PASSES = np.array([n in ("air", "glass", "light_blue_stained_glass", "gray_stained_glass", "lantern", "barrier")
-                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall", "_sign")) or n in ("rail", "composter")
+                          or n.endswith(("_fence", "_door", "_slab", "_stairs", "_wall", "_sign", "_bed", "_carpet"))
+                          or n in ("rail", "composter")
                           for n in _names]) | CROSS
 UNDERWATER = np.array([n in ("seagrass", "tall_seagrass", "kelp", "kelp_plant") for n in _names])   # full of water
 _DIMS_LIGHT = np.array([n.endswith("_leaves") or n == "water" for n in _names]) | UNDERWATER

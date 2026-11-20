@@ -84,7 +84,28 @@ def block_table():
             "sign": int(props["rotation"]) if name.endswith("_sign") else -1,     # drawn at its true angle
             "collide": collide,
         })
+    # doors open and shut (right click, like the game): an open twin of every door, after the real blocks. The
+    # twin is drawn with the door's own textures, as the panel the game shows for an open door (DOOR_OPEN).
+    for i in range(len(table)):
+        row = table[i]
+        if row["name"].endswith("_door") and row["props"].get("open") == "false":
+            lo, hi = DOOR_OPEN[(row["props"]["facing"], row["props"].get("hinge", "left"))]
+            box = [*lo, *hi]
+            twin = dict(row, props=dict(row["props"], open="true"), boxes=[box], collide=[box], tex=i, twin=i)
+            row["twin"] = len(table)
+            table.append(twin)
     return table
+
+
+# the panel of an open door, by facing and hinge side, as (x, y, z) low and high corners in a block; read from the
+# game's collision shapes (tests/check_blocks.py compares them with Minecraft's own data)
+_W = 3 / 16
+DOOR_OPEN = {
+    ("north", "left"): ((0, 0, 0), (_W, 1, 1)), ("north", "right"): ((1 - _W, 0, 0), (1, 1, 1)),
+    ("south", "left"): ((1 - _W, 0, 0), (1, 1, 1)), ("south", "right"): ((0, 0, 0), (_W, 1, 1)),
+    ("west", "left"): ((0, 0, 1 - _W), (1, 1, 1)), ("west", "right"): ((0, 0, 0), (1, 1, _W)),
+    ("east", "left"): ((0, 0, 0), (1, 1, _W)), ("east", "right"): ((0, 0, 1 - _W), (1, 1, 1)),
+}
 
 
 VIEWER = Path(__file__).resolve().parent / "app" / "walk.html"
